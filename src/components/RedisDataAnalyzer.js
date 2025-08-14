@@ -11,7 +11,7 @@ const RedisDataAnalyzer = () => {
       setLoading(true);
       setError(null);
       
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const response = await axios.get(`${apiBaseUrl}/api/analyze-redis-structure`);
       
       setAnalysis(response.data);

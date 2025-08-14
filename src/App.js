@@ -35,7 +35,7 @@ function App() {
       console.log(`Fetching movies for page ${page}`);
       
       // Fetch from backend API with pagination
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const response = await axios.get(`${apiBaseUrl}/api/movies?page=${page}&limit=20`);
       
       if (response.data.movies) {
@@ -78,7 +78,7 @@ function App() {
       console.log(`Fetching TV shows for page ${page}`);
       
       // Fetch from backend API with pagination
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const response = await axios.get(`${apiBaseUrl}/api/tvshows?page=${page}&limit=20`);
       
       if (response.data.tvShows) {
