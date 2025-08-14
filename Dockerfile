@@ -39,15 +39,15 @@ COPY --from=build /app/build /usr/share/nginx/html
 # Copy custom nginx configuration (uses pid /tmp/nginx.pid)
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Switch to non-root user
+# Switch to non-root user (will be overridden by K8s securityContext)
 USER reactapp
 
 # Expose the application port
-EXPOSE 3000
+EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -fsS http://localhost:3000/ >/dev/null || exit 1
+  CMD curl -fsS http://localhost:80/ >/dev/null || exit 1
 
 # Start nginx with dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
