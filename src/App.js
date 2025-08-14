@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import MovieGrid from './components/MovieGrid';
 import Header from './components/Header';
+import SearchModal from './components/SearchModal';
 import TorrentHealthOverview from './components/TorrentHealthOverview';
-import RedisDataAnalyzer from './components/RedisDataAnalyzer';
+// import RedisDataAnalyzer from './components/RedisDataAnalyzer';
 
 function App() {
   const [activeTab, setActiveTab] = useState('Movies');
@@ -22,12 +23,34 @@ function App() {
     hasNextPage: false,
     hasPrevPage: false
   });
+  
+  // Search-related state
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchInfo, setSearchInfo] = useState(null);
 
+  // Simplified initial load
   useEffect(() => {
-    fetchContent(1);
-  }, [activeTab]);
+    console.log('Initial load effect triggered for tab:', activeTab);
+    if (!isSearchMode) {
+      if (activeTab === 'Movies') {
+        fetchMovies(1);
+      } else if (activeTab === 'TV Shows') {
+        fetchTvShows(1);
+      }
+    }
+  }, [activeTab]); // Only depend on activeTab
 
-  const fetchMovies = async (page = 1) => {
+  // Clear search mode when tab changes
+  useEffect(() => {
+    console.log('Tab change effect triggered:', activeTab, 'isSearchMode:', isSearchMode);
+    if (isSearchMode) {
+      setIsSearchMode(false);
+      setSearchInfo(null);
+    }
+  }, [activeTab]); // Only depend on activeTab
+
+  const fetchMovies = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       setError(null);
@@ -68,9 +91,9 @@ function App() {
       });
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchTvShows = async (page = 1) => {
+  const fetchTvShows = useCallback(async (page = 1) => {
     try {
       setLoading(true);
       setError(null);
@@ -111,15 +134,15 @@ function App() {
       });
       setLoading(false);
     }
-  };
+  }, []);
 
-  const fetchContent = async (page = 1) => {
+  const fetchContent = useCallback(async (page = 1) => {
     if (activeTab === 'Movies') {
       await fetchMovies(page);
     } else if (activeTab === 'TV Shows') {
       await fetchTvShows(page);
     }
-  };
+  }, [activeTab, fetchMovies, fetchTvShows]);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.totalPages) {
@@ -134,6 +157,54 @@ function App() {
         });
       }
     }
+  };
+
+  // Handle search modal open
+  const handleSearchClick = () => {
+    setIsSearchModalOpen(true);
+  };
+
+  // Handle search modal close
+  const handleSearchModalClose = () => {
+    setIsSearchModalOpen(false);
+  };
+
+  // Handle search results application
+  const handleSearchResults = (results, searchPagination, searchData) => {
+    if (activeTab === 'Movies') {
+      setMovies(results);
+    } else {
+      setTvShows(results);
+    }
+    
+    setPagination({
+      ...searchPagination,
+      totalItems: activeTab === 'Movies' ? searchPagination.totalMovies : searchPagination.totalTVShows,
+      itemsPerPage: activeTab === 'Movies' ? searchPagination.moviesPerPage : searchPagination.tvShowsPerPage
+    });
+    
+    setSearchInfo(searchData);
+    setIsSearchMode(true);
+    setLoading(false);
+    setError(null);
+    
+    // Show success toast
+    toast.success(`🔍 Found ${results.length} ${activeTab.toLowerCase()} matching "${searchData.query}"`, {
+      autoClose: 3000,
+    });
+    
+    // Scroll to top
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Clear search and return to normal browsing
+  const clearSearch = () => {
+    setIsSearchMode(false);
+    setSearchInfo(null);
+    fetchContent(1);
+    toast.info(`🔄 Cleared search, showing all ${activeTab.toLowerCase()}`, {
+      autoClose: 2000,
+    });
   };
 
   const renderPagination = () => {
@@ -209,7 +280,19 @@ function App() {
 
   return (
     <div className="App">
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Header 
+        activeTab={activeTab} 
+        setActiveTab={setActiveTab} 
+        onSearchClick={handleSearchClick}
+      />
+      
+      <SearchModal
+        isOpen={isSearchModalOpen}
+        onClose={handleSearchModalClose}
+        activeTab={activeTab}
+        onSearchResults={handleSearchResults}
+      />
+      
       <main className="main-content">
         {loading && (
           <div className="loading">
@@ -223,10 +306,24 @@ function App() {
         {!loading && ((activeTab === 'Movies' && movies.length > 0) || (activeTab === 'TV Shows' && tvShows.length > 0)) && (
           <>
             <div className="movies-header">
-              <h2>{activeTab === 'Movies' ? 'Movie' : 'TV Show'} Collection</h2>
-              {pagination.totalItems > 0 && (
-                <span className="total-count">{pagination.totalItems} {activeTab.toLowerCase()} available</span>
-              )}
+              <h2>
+                {isSearchMode ? '🔍 Search Results' : `${activeTab === 'Movies' ? 'Movie' : 'TV Show'} Collection`}
+              </h2>
+              <div className="header-info">
+                {isSearchMode && searchInfo && (
+                  <div className="search-status">
+                    <span className="search-query">"{searchInfo.query}"</span>
+                    <button className="clear-search" onClick={clearSearch} title="Clear search">
+                      ✕ Clear Search
+                    </button>
+                  </div>
+                )}
+                {pagination.totalItems > 0 && (
+                  <span className="total-count">
+                    {pagination.totalItems} {activeTab.toLowerCase()} {isSearchMode ? 'found' : 'available'}
+                  </span>
+                )}
+              </div>
             </div>
             
             <TorrentHealthOverview />

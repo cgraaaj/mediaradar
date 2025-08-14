@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './Header.css';
 
-const Header = ({ activeTab, setActiveTab }) => {
+const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
@@ -18,6 +18,12 @@ const Header = ({ activeTab, setActiveTab }) => {
     }
   };
 
+  const handleSearchClick = () => {
+    if (onSearchClick) {
+      onSearchClick();
+    }
+  };
+
   return (
     <header className="header">
       <div className="header-content">
@@ -28,7 +34,7 @@ const Header = ({ activeTab, setActiveTab }) => {
               className={`nav-tab ${activeTab === tab ? 'active' : ''} ${tab === 'VR Player' ? 'vr-tab' : ''}`}
               onClick={() => handleTabClick(tab)}
             >
-              {tab === 'VR Player' ? 'VR Player' : tab}
+              {tab}
             </button>
           ))}
         </nav>
@@ -62,13 +68,13 @@ const Header = ({ activeTab, setActiveTab }) => {
         </div>
         
         <div className="header-actions">
-          <button className="action-btn search-btn">🔍</button>
-          <button className="action-btn random-btn">🎲</button>
-          <button className="action-btn notifications-btn">🔔</button>
-          <button className="action-btn favorites-btn">❤️</button>
-          <button className="action-btn folder-btn">📁</button>
-          <button className="action-btn info-btn">ℹ️</button>
-          <button className="action-btn settings-btn">⚙️</button>
+          <button className="action-btn search-btn" onClick={handleSearchClick} title="Search">🔍</button>
+          <button className="action-btn random-btn" title="Random">🎲</button>
+          <button className="action-btn notifications-btn" title="Notifications">🔔</button>
+          <button className="action-btn favorites-btn" title="Favorites">❤️</button>
+          <button className="action-btn folder-btn" title="Files">📁</button>
+          <button className="action-btn info-btn" title="Info">ℹ️</button>
+          <button className="action-btn settings-btn" title="Settings">⚙️</button>
         </div>
       </div>
     </header>

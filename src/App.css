@@ -40,6 +40,47 @@ body {
   font-weight: 600;
 }
 
+.header-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.search-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #2a2a2a;
+  padding: 8px 12px;
+  border-radius: 20px;
+  border: 1px solid #333;
+}
+
+.search-query {
+  color: #4a9eff;
+  font-size: 14px;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.clear-search {
+  background: #333;
+  border: 1px solid #444;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clear-search:hover {
+  background: #ff6b6b;
+  border-color: #ff6b6b;
+  transform: scale(1.05);
+}
+
 .total-count {
   color: #4a9eff;
   font-size: 14px;
@@ -171,6 +212,21 @@ body {
 
   .movies-header h2 {
     font-size: 20px;
+  }
+
+  .header-info {
+    width: 100%;
+    align-items: flex-start;
+  }
+
+  .search-status {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .search-query {
+    flex: 1;
+    text-align: left;
   }
 
   .total-count {
