@@ -22,24 +22,22 @@ RUN npm run build
 FROM nginx:alpine AS production
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S reactapp && \
     adduser -S reactapp -u 1001
 
+# Prepare writable dirs for non-root Nginx
+RUN mkdir -p /tmp/nginx /tmp/nginx/client_temp /tmp/nginx/proxy_temp \
+    /tmp/nginx/fastcgi_temp /tmp/nginx/uwsgi_temp /tmp/nginx/scgi_temp /var/log/nginx && \
+    chown -R reactapp:reactapp /tmp/nginx /var/log/nginx /usr/share/nginx/html /etc/nginx
+
 # Copy built application from build stage
 COPY --from=build /app/build /usr/share/nginx/html
 
-# Copy custom nginx configuration
+# Copy custom nginx configuration (uses pid /tmp/nginx.pid)
 COPY nginx.conf /etc/nginx/nginx.conf
-
-# Create directories and set permissions
-RUN mkdir -p /var/cache/nginx/client_temp /var/cache/nginx/proxy_temp \
-    /var/cache/nginx/fastcgi_temp /var/cache/nginx/uwsgi_temp \
-    /var/cache/nginx/scgi_temp /var/log/nginx /var/run && \
-    chown -R reactapp:reactapp /var/cache/nginx /var/log/nginx \
-    /var/run /usr/share/nginx/html /etc/nginx
 
 # Switch to non-root user
 USER reactapp
@@ -49,7 +47,7 @@ EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+  CMD curl -fsS http://localhost:3000/ >/dev/null || exit 1
 
 # Start nginx with dumb-init for proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
