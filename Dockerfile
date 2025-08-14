@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.6
 # Multi-stage build for React application
 # Build stage
 FROM node:18-alpine AS build
@@ -9,7 +10,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including dev dependencies for build)
-RUN npm ci && npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund && npm cache clean --force
 
 # Copy source code
 COPY . .
