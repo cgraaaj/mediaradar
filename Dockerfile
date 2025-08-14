@@ -9,6 +9,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
+# Accept API base URL at build time (default to /api for Traefik routing)
+ARG REACT_APP_API_BASE_URL=/api
+ENV REACT_APP_API_BASE_URL=${REACT_APP_API_BASE_URL}
+
 # Install dependencies (including dev dependencies for build)
 RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund && npm cache clean --force
 
