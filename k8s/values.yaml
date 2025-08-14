@@ -62,7 +62,7 @@ service:
   # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
   port: 80
 env:
-  REACT_APP_API_BASE_URL: "http://mediaradar-svc-k8s.mediaradar-svc.svc.cluster.local:5000"
+  REACT_APP_API_BASE_URL: "/api"
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
