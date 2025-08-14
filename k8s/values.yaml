@@ -39,13 +39,15 @@ podAnnotations: {}
 podLabels: {}
 
 podSecurityContext:
-  fsGroup: 0
-  # fsGroup: 2000
+  fsGroup: 5400
 
 securityContext:
-  runAsNonRoot: false
-  runAsUser: 0
-  runAsGroup: 0
+  runAsNonRoot: true
+  runAsUser: 5400
+  runAsGroup: 5400
+  capabilities:
+    add:
+      - NET_BIND_SERVICE
   # capabilities:
   #   drop:
   #   - ALL

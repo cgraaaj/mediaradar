@@ -25,13 +25,13 @@ FROM nginx:alpine AS production
 RUN apk add --no-cache dumb-init curl
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S reactapp && \
-    adduser -S reactapp -u 1001
+RUN addgroup -g 5400 -S mygroup && \
+    adduser -S myuser -u 5400 -G mygroup
 
 # Prepare writable dirs for non-root Nginx
 RUN mkdir -p /tmp/nginx /tmp/nginx/client_temp /tmp/nginx/proxy_temp \
     /tmp/nginx/fastcgi_temp /tmp/nginx/uwsgi_temp /tmp/nginx/scgi_temp /var/log/nginx && \
-    chown -R reactapp:reactapp /tmp/nginx /var/log/nginx /usr/share/nginx/html /etc/nginx
+    chown -R myuser:mygroup /tmp/nginx /var/log/nginx /usr/share/nginx/html /etc/nginx
 
 # Copy built application from build stage
 COPY --from=build /app/build /usr/share/nginx/html
@@ -39,8 +39,8 @@ COPY --from=build /app/build /usr/share/nginx/html
 # Copy custom nginx configuration (uses pid /tmp/nginx.pid)
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Switch to non-root user (will be overridden by K8s securityContext)
-USER reactapp
+# Switch to non-root user (can be overridden by K8s securityContext)
+USER myuser
 
 # Expose the application port
 EXPOSE 80
