@@ -5,13 +5,13 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
-  const tabs = ['Movies', 'TV Shows', 'VR Player', 'PopcornPal'];
+  const tabs = ['Movies', 'TV Shows', 'Player', 'PopcornPal'];
   const genres = ['All', 'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Documentary'];
   const sortOptions = ['Popularity', 'Year', 'Rating', 'Name'];
 
   const handleTabClick = (tab) => {
-    if (tab === 'VR Player') {
-      // Open VR Player in new tab
+    if (tab === 'Player') {
+      // Open Player in new tab
       window.open('https://vrplayer.cgraaaj.in', '_blank');
     } else {
       setActiveTab(tab);
@@ -31,7 +31,7 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
           {tabs.map(tab => (
             <button
               key={tab}
-              className={`nav-tab ${activeTab === tab ? 'active' : ''} ${tab === 'VR Player' ? 'vr-tab' : ''}`}
+              className={`nav-tab ${activeTab === tab ? 'active' : ''}`}
               onClick={() => handleTabClick(tab)}
             >
               {tab}

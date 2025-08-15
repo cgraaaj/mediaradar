@@ -42,36 +42,7 @@
   color: #ccc;
 }
 
-.nav-tab.vr-tab {
-  color: #ff6b35;
-  border-bottom-color: transparent;
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.1) 0%, rgba(255, 107, 53, 0.05) 100%);
-  border-radius: 8px 8px 0 0;
-  position: relative;
-}
 
-.nav-tab.vr-tab:hover {
-  color: #ff8559;
-  background: linear-gradient(135deg, rgba(255, 107, 53, 0.15) 0%, rgba(255, 107, 53, 0.08) 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
-}
-
-.nav-tab.vr-tab::before {
-  content: '';
-  position: absolute;
-  bottom: -3px;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, #ff6b35, #ff8559);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.nav-tab.vr-tab:hover::before {
-  opacity: 1;
-}
 
 .controls {
   display: flex;

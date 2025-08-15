@@ -9,6 +9,7 @@ const PopcornPal = () => {
   const [loading, setLoading] = useState(false);
   const [examples, setExamples] = useState([]);
   const [aiStatus, setAiStatus] = useState(null);
+  const [watchLinks, setWatchLinks] = useState({});
 
   useEffect(() => {
     fetchExamples();
@@ -46,6 +47,7 @@ const PopcornPal = () => {
 
     setLoading(true);
     setSuggestions(null);
+    setWatchLinks({});
 
     try {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
@@ -58,6 +60,9 @@ const PopcornPal = () => {
       if (response.data.success) {
         setSuggestions(response.data);
         toast.success('🎬 Got your movie suggestions!');
+        
+        // Extract movie names from suggestions and get watch links
+        extractAndFindWatchLinks(response.data.message);
       } else {
         toast.error(response.data.message || 'Failed to get suggestions');
         setSuggestions({ success: false, message: response.data.message });
@@ -80,6 +85,231 @@ const PopcornPal = () => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSearch();
+    }
+  };
+
+  // Extract movie names from AI response and get watch links
+  const extractAndFindWatchLinks = async (aiResponse) => {
+    try {
+      console.log('🔍 Extracting movie names from:', aiResponse);
+      
+      const matches = [];
+      
+      // Priority 1: Extract movies marked with asterisks **Movie Name**
+      const asteriskPattern = /\*\*([^*]+)\*\*/g;
+      let asteriskMatch;
+      while ((asteriskMatch = asteriskPattern.exec(aiResponse)) !== null) {
+        const movieName = asteriskMatch[1].trim();
+        if (movieName && movieName.length > 2 && movieName.length < 100) {
+          // Clean up the movie name
+          const cleanName = movieName
+            .replace(/^(the|a|an)\s+/i, '') // Remove articles at the beginning
+            .replace(/\s+(movie|film)$/i, '') // Remove "movie" or "film" at the end
+            .trim();
+          
+          if (cleanName.length > 2) {
+            matches.push(cleanName);
+            console.log('✅ Found asterisk movie:', cleanName);
+          }
+        }
+      }
+      
+      // Priority 2: Only if no asterisk movies found, try quoted patterns
+      if (matches.length === 0) {
+        console.log('⚠️ No asterisk movies found, trying quoted patterns...');
+        
+        const quotedPatterns = [
+          /"([^"]+)"/g,        // "Movie Name"
+          /'([^']+)'/g,        // 'Movie Name'
+        ];
+        
+        quotedPatterns.forEach(pattern => {
+          let match;
+          while ((match = pattern.exec(aiResponse)) !== null) {
+            const movieName = match[1].trim();
+            // Only include if it looks like a movie title (contains letters, reasonable length)
+            if (movieName && 
+                movieName.length > 2 && 
+                movieName.length < 100 &&
+                /^[A-Z]/.test(movieName) && // Starts with capital letter
+                !/^(the|a|an|in|on|at|to|for|with|by|from)$/i.test(movieName) && // Not just articles/prepositions
+                !movieName.includes('http') && // Not URLs
+                !movieName.includes('@')) { // Not emails
+              
+              const cleanName = movieName
+                .replace(/^(the|a|an)\s+/i, '')
+                .replace(/\s+(movie|film)$/i, '')
+                .trim();
+              
+              if (cleanName.length > 2) {
+                matches.push(cleanName);
+                console.log('📝 Found quoted movie:', cleanName);
+              }
+            }
+          }
+        });
+      }
+      
+      // Priority 3: Only if still no movies found, try pattern matching
+      if (matches.length === 0) {
+        console.log('⚠️ No quoted movies found, trying pattern matching...');
+        
+        // Look for movie titles with years: Movie Name (2023) or Movie Name from 2023
+        const yearPatterns = [
+          /([A-Z][a-zA-Z\s:&'-]{2,40}?)\s+\(\d{4}\)/g,  // Movie Name (2023)
+          /([A-Z][a-zA-Z\s:&'-]{2,40}?)\s+from\s+\d{4}/g,  // Movie Name from 2023
+        ];
+        
+        yearPatterns.forEach(pattern => {
+          let match;
+          while ((match = pattern.exec(aiResponse)) !== null) {
+            const movieName = match[1].trim();
+            if (movieName && movieName.length > 2 && movieName.length < 100) {
+              const cleanName = movieName
+                .replace(/^(the|a|an)\s+/i, '')
+                .replace(/\s+(movie|film)$/i, '')
+                .trim();
+              
+              if (cleanName.length > 2) {
+                matches.push(cleanName);
+                console.log('📅 Found year-pattern movie:', cleanName);
+              }
+            }
+          }
+        });
+      }
+      
+      // Remove duplicates and get unique movie names
+      const uniqueMovies = [...new Set(matches)].slice(0, 5); // Limit to 5 movies
+      
+      console.log('📝 Extracted movie names:', uniqueMovies);
+      
+      // Get watch links for each movie
+      console.log('🎬 Searching for watch links for movies:', uniqueMovies);
+      
+      const watchLinkPromises = uniqueMovies.map(async (movieName) => {
+        try {
+          console.log(`🔍 Searching Jellyfin for: "${movieName}"`);
+          const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+          const response = await axios.post(`${apiBaseUrl}/ai/watch`, {
+            movieName: movieName
+          });
+          
+          console.log(`📡 Response for "${movieName}":`, response.data);
+          
+          return {
+            movieName,
+            ...response.data
+          };
+        } catch (error) {
+          console.error(`❌ Failed to get watch link for ${movieName}:`, error);
+          return {
+            movieName,
+            success: false,
+            available: false
+          };
+        }
+      });
+      
+      const watchResults = await Promise.all(watchLinkPromises);
+      
+      // Store watch links
+      const newWatchLinks = {};
+      watchResults.forEach(result => {
+        if (result.success && result.available) {
+          newWatchLinks[result.movieName] = result;
+        }
+      });
+      
+      setWatchLinks(newWatchLinks);
+      
+      console.log('💾 Final watch links stored:', newWatchLinks);
+      
+      if (Object.keys(newWatchLinks).length > 0) {
+        toast.info(`🎥 Found ${Object.keys(newWatchLinks).length} movies available to watch!`, {
+          autoClose: 4000
+        });
+      } else {
+        console.log('⚠️ No watch links found for any movies');
+        if (uniqueMovies.length > 0) {
+          toast.info(`🔍 Searched for ${uniqueMovies.length} movies but none are available in Jellyfin`, {
+            autoClose: 4000
+          });
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error extracting watch links:', error);
+    }
+  };
+
+  // Handle watch movie click with direct frontend authentication
+  const handleWatchMovie = async (movieData) => {
+    try {
+      const { server, movieId } = movieData.watchData;
+      const movieName = movieData.movie.name;
+      
+      console.log(`🎬 Opening "${movieName}" in Jellyfin...`);
+      
+      // Open a new window/tab for Jellyfin
+      const jellyfinWindow = window.open('about:blank', '_blank');
+      
+      if (!jellyfinWindow) {
+        toast.error('❌ Please allow popups to open Jellyfin player');
+        return;
+      }
+      
+             try {
+         // Authenticate with Jellyfin API
+         console.log('🔐 Authenticating with Jellyfin...');
+         const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
+           method: 'POST',
+           headers: {
+             'Content-Type': 'application/json',
+             'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-' + Date.now() + '", Version="1.0.0"'
+           },
+           body: JSON.stringify({
+             Username: 'anonymous',
+             Pw: 'anonymous@jelly'
+           })
+         });
+         
+         if (!authResponse.ok) {
+           throw new Error(`Authentication failed: ${authResponse.status}`);
+         }
+         
+         const authData = await authResponse.json();
+         console.log('✅ Authentication successful');
+         
+         // Use your custom token login HTML file on the Jellyfin server
+         const tokenLoginUrl = `${server}/web/token-login.html?` +
+           `token=${encodeURIComponent(authData.AccessToken)}&` +
+           `userId=${encodeURIComponent(authData.User.Id)}&` +
+           `movieId=${encodeURIComponent(movieId)}`;
+         
+         console.log('🌉 Redirecting to token login page:', tokenLoginUrl);
+         
+         // Simply redirect the popup to your token login page
+         jellyfinWindow.location.href = tokenLoginUrl;
+         
+         toast.success(`🎥 Opening "${movieName}" in Jellyfin player!`, {
+           autoClose: 3000
+         });
+         
+       } catch (error) {
+         console.error('❌ Frontend auth failed:', error);
+         
+         // Fallback: redirect to manual login
+         jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
+         
+         toast.warning(`⚠️ Please login manually. Username: anonymous, Password: anonymous@jelly`, {
+           autoClose: 5000
+         });
+       }
+      
+    } catch (error) {
+      console.error('Error opening watch link:', error);
+      toast.error('❌ Failed to open movie player');
     }
   };
 
@@ -173,22 +403,50 @@ const PopcornPal = () => {
             )}
           </div>
 
-          <div className="suggestions-content">
-            {suggestions.success ? (
-              <div className="ai-response">
-                <div className="response-text">
-                  {suggestions.message.split('\n').map((line, index) => (
-                    <p key={index}>{line}</p>
-                  ))}
+                      <div className="suggestions-content">
+              {suggestions.success ? (
+                <div className="ai-response">
+                  <div className="response-text">
+                    {suggestions.message.split('\n').map((line, index) => (
+                      <p key={index}>{line}</p>
+                    ))}
+                  </div>
+                  
+                  {Object.keys(watchLinks).length > 0 && (
+                    <div className="watch-links-section">
+                      <h4>🎥 Available to Watch:</h4>
+                      <div className="watch-links-grid">
+                        {Object.entries(watchLinks).map(([movieName, movieData]) => (
+                          <div key={movieName} className="watch-link-item">
+                            <div className="movie-info">
+                              <h5>{movieData.movie.name}</h5>
+                              {movieData.movie.year && (
+                                <span className="movie-year">({movieData.movie.year})</span>
+                              )}
+                              {movieData.movie.rating && (
+                                <span className="movie-rating">⭐ {movieData.movie.rating}</span>
+                              )}
+                            </div>
+                            <button
+                              className="watch-btn"
+                              onClick={() => handleWatchMovie(movieData)}
+                              title={`Watch ${movieData.movie.name}`}
+                            >
+                              ▶️ Watch Now
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ) : (
-              <div className="no-results">
-                <p>{suggestions.message}</p>
-                <p>💡 Try rephrasing your question or being more specific.</p>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="no-results">
+                  <p>{suggestions.message}</p>
+                  <p>💡 Try rephrasing your question or being more specific.</p>
+                </div>
+              )}
+            </div>
 
           <div className="suggestions-footer">
             <button
@@ -196,6 +454,7 @@ const PopcornPal = () => {
               onClick={() => {
                 setQuery('');
                 setSuggestions(null);
+                setWatchLinks({});
               }}
             >
               🔄 Ask Another Question
