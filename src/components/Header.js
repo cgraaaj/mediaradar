@@ -5,7 +5,7 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
-  const tabs = ['Movies', 'TV Shows', 'VR Player'];
+  const tabs = ['Movies', 'TV Shows', 'VR Player', 'PopcornPal'];
   const genres = ['All', 'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Documentary'];
   const sortOptions = ['Popularity', 'Year', 'Rating', 'Name'];
 

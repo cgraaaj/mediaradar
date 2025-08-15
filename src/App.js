@@ -7,6 +7,7 @@ import MovieGrid from './components/MovieGrid';
 import Header from './components/Header';
 import SearchModal from './components/SearchModal';
 import TorrentHealthOverview from './components/TorrentHealthOverview';
+import PopcornPal from './components/PopcornPal';
 // import RedisDataAnalyzer from './components/RedisDataAnalyzer';
 
 function App() {
@@ -339,6 +340,10 @@ function App() {
           <div className="no-movies">
             <p>No {activeTab.toLowerCase()} found. Please check your Redis connection.</p>
           </div>
+        )}
+
+        {activeTab === 'PopcornPal' && (
+          <PopcornPal />
         )}
       </main>
       
