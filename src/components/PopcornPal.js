@@ -101,14 +101,14 @@ const PopcornPal = () => {
       while ((asteriskMatch = asteriskPattern.exec(aiResponse)) !== null) {
         const movieName = asteriskMatch[1].trim();
         if (movieName && movieName.length > 2 && movieName.length < 100) {
-          // Clean up the movie name
+            // Clean up the movie name
           const cleanName = movieName
-            .replace(/^(the|a|an)\s+/i, '') // Remove articles at the beginning
-            .replace(/\s+(movie|film)$/i, '') // Remove "movie" or "film" at the end
-            .trim();
-          
-          if (cleanName.length > 2) {
-            matches.push(cleanName);
+              .replace(/^(the|a|an)\s+/i, '') // Remove articles at the beginning
+              .replace(/\s+(movie|film)$/i, '') // Remove "movie" or "film" at the end
+              .trim();
+            
+            if (cleanName.length > 2) {
+              matches.push(cleanName);
             console.log('✅ Found asterisk movie:', cleanName);
           }
         }
@@ -173,9 +173,9 @@ const PopcornPal = () => {
               if (cleanName.length > 2) {
                 matches.push(cleanName);
                 console.log('📅 Found year-pattern movie:', cleanName);
-              }
             }
-          }
+            }
+        }
         });
       }
       
@@ -266,7 +266,7 @@ const PopcornPal = () => {
            method: 'POST',
            headers: {
              'Content-Type': 'application/json',
-             'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-' + Date.now() + '", Version="1.0.0"'
+             'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
            },
            body: JSON.stringify({
              Username: 'anonymous',
@@ -291,10 +291,10 @@ const PopcornPal = () => {
          
          // Simply redirect the popup to your token login page
          jellyfinWindow.location.href = tokenLoginUrl;
-         
+      
          toast.success(`🎥 Opening "${movieName}" in Jellyfin player!`, {
-           autoClose: 3000
-         });
+        autoClose: 3000
+      });
          
        } catch (error) {
          console.error('❌ Frontend auth failed:', error);

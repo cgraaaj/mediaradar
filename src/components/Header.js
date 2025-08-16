@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './Header.css';
+import { toast } from 'react-toastify';
 
 const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const [activeGenre, setActiveGenre] = useState('All');
@@ -9,12 +10,78 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const genres = ['All', 'Action', 'Comedy', 'Drama', 'Horror', 'Sci-Fi', 'Documentary'];
   const sortOptions = ['Popularity', 'Year', 'Rating', 'Name'];
 
-  const handleTabClick = (tab) => {
+  const handleTabClick = async (tab) => {
     if (tab === 'Player') {
-      // Open Player in new tab
-      window.open('https://vrplayer.cgraaaj.in', '_blank');
+      // Open Player with authentication logic
+      await openPlayerWithAuth();
     } else {
       setActiveTab(tab);
+    }
+  };
+
+  const openPlayerWithAuth = async () => {
+    try {
+      const server = 'https://vrplayer.cgraaaj.in';
+      console.log('🎬 Opening Jellyfin Player with authentication...');
+      
+      // Open a new window/tab for Jellyfin
+      const jellyfinWindow = window.open('about:blank', '_blank');
+      
+      if (!jellyfinWindow) {
+        toast.error('❌ Please allow popups to open Jellyfin player');
+        return;
+      }
+      
+      try {
+        // Authenticate with Jellyfin API (same logic as PopcornPal)
+        console.log('🔐 Authenticating with Jellyfin...');
+        const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+                         'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
+          },
+          body: JSON.stringify({
+            Username: 'anonymous',
+            Pw: 'anonymous@jelly'
+          })
+        });
+        
+        if (!authResponse.ok) {
+          throw new Error(`Authentication failed: ${authResponse.status}`);
+        }
+        
+        const authData = await authResponse.json();
+        console.log('✅ Authentication successful');
+        
+        // Use token-login.html for authentication (without movieId since we're going to home)
+        const tokenLoginUrl = `${server}/web/token-login.html?` +
+          `token=${encodeURIComponent(authData.AccessToken)}&` +
+          `userId=${encodeURIComponent(authData.User.Id)}`;
+        
+        console.log('🌉 Redirecting to token login page:', tokenLoginUrl);
+        
+        // Redirect the popup to token login page
+        jellyfinWindow.location.href = tokenLoginUrl;
+        
+        toast.success('🎥 Opening Jellyfin Player!', {
+          autoClose: 3000
+        });
+        
+      } catch (error) {
+        console.error('❌ Player auth failed:', error);
+        
+        // Fallback: redirect to manual login
+        jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
+        
+        toast.warning('⚠️ Please login manually. Username: anonymous, Password: anonymous@jelly', {
+          autoClose: 5000
+        });
+      }
+      
+    } catch (error) {
+      console.error('Error opening player:', error);
+      toast.error('❌ Failed to open Jellyfin player');
     }
   };
 
