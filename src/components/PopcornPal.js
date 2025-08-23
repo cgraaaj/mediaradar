@@ -424,7 +424,7 @@ const PopcornPal = () => {
                                 <span className="movie-year">({movieData.movie.year})</span>
                               )}
                               {movieData.movie.rating && (
-                                <span className="movie-rating">⭐ {movieData.movie.rating}</span>
+                                <span className="movie-rating">⭐ {parseFloat(movieData.movie.rating).toFixed(1)}</span>
                               )}
                             </div>
                             <button
