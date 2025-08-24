@@ -63,6 +63,7 @@ service:
   port: 80
 env:
   REACT_APP_API_BASE_URL: "/api"
+  REACT_APP_ENV: "production"
 
 # This block is for setting up the ingress for more information can be found here: https://kubernetes.io/docs/concepts/services-networking/ingress/
 ingress:
