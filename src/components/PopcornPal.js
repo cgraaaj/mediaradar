@@ -243,13 +243,14 @@ const PopcornPal = () => {
     }
   };
 
-  // Handle watch movie click with direct frontend authentication
+    // Handle watch movie click with environment-based authentication
   const handleWatchMovie = async (movieData) => {
     try {
       const { server, movieId } = movieData.watchData;
       const movieName = movieData.movie.name;
+      const isDev = process.env.REACT_APP_ENV === 'development' || process.env.NODE_ENV === 'development';
       
-      console.log(`🎬 Opening "${movieName}" in Jellyfin...`);
+      console.log(`🎬 Opening "${movieName}" in Jellyfin (${isDev ? 'dev' : 'prod'} mode)...`);
       
       // Open a new window/tab for Jellyfin
       const jellyfinWindow = window.open('about:blank', '_blank');
@@ -259,54 +260,59 @@ const PopcornPal = () => {
         return;
       }
       
-             try {
-         // Authenticate with Jellyfin API
-         console.log('🔐 Authenticating with Jellyfin...');
-         const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
-           method: 'POST',
-           headers: {
-             'Content-Type': 'application/json',
-             'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
-           },
-           body: JSON.stringify({
-             Username: 'anonymous',
-             Pw: 'anonymous@jelly'
-           })
-         });
-         
-         if (!authResponse.ok) {
-           throw new Error(`Authentication failed: ${authResponse.status}`);
-         }
-         
-         const authData = await authResponse.json();
-         console.log('✅ Authentication successful');
-         
-         // Use your custom token login HTML file on the Jellyfin server
-         const tokenLoginUrl = `${server}/web/token-login.html?` +
-           `token=${encodeURIComponent(authData.AccessToken)}&` +
-           `userId=${encodeURIComponent(authData.User.Id)}&` +
-           `movieId=${encodeURIComponent(movieId)}`;
-         
-         console.log('🌉 Redirecting to token login page:', tokenLoginUrl);
-         
-         // Simply redirect the popup to your token login page
-         jellyfinWindow.location.href = tokenLoginUrl;
-      
-         toast.success(`🎥 Opening "${movieName}" in Jellyfin player!`, {
-        autoClose: 3000
-      });
-         
-       } catch (error) {
-         console.error('❌ Frontend auth failed:', error);
-         
-         // Fallback: redirect to manual login
-         jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
-         
-         toast.warning(`⚠️ Please login manually. Username: anonymous, Password: anonymous@jelly`, {
-           autoClose: 5000
-         });
-       }
-      
+      if (isDev) {
+        // Development mode: Use token-login approach
+        try {
+          console.log('🔐 Dev mode: Authenticating with Jellyfin...');
+          const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
+            },
+            body: JSON.stringify({
+              Username: 'anonymous',
+              Pw: 'anonymous@jelly'
+            })
+          });
+          
+          if (!authResponse.ok) {
+            throw new Error(`Authentication failed: ${authResponse.status}`);
+          }
+          
+          const authData = await authResponse.json();
+          console.log('✅ Dev mode: Authentication successful');
+          
+          // Use token-login.html for authentication
+          const tokenLoginUrl = `${server}/web/token-login.html?` +
+            `token=${encodeURIComponent(authData.AccessToken)}&` +
+            `userId=${encodeURIComponent(authData.User.Id)}&` +
+            `movieId=${encodeURIComponent(movieId)}`;
+          
+          jellyfinWindow.location.href = tokenLoginUrl;
+          
+          toast.success(`🎥 Opening "${movieName}" in Jellyfin (Dev Mode)!`, {
+            autoClose: 3000
+          });
+          
+        } catch (error) {
+          console.error('❌ Dev mode auth failed:', error);
+          // Fallback to manual login
+          jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
+          toast.warning(`⚠️ Dev auth failed. Please login manually.`, {
+            autoClose: 5000
+          });
+        }
+      } else {
+        // Production mode: Direct to login page with movie context
+        console.log('🔒 Prod mode: Redirecting to secure login');
+        jellyfinWindow.location.href = `${server}/web/index.html#!/details?id=${movieId}`;
+        
+        toast.info(`🔐 Opening "${movieName}" (Secure Login Required)`, {
+          autoClose: 4000
+        });
+      }
+     
     } catch (error) {
       console.error('Error opening watch link:', error);
       toast.error('❌ Failed to open movie player');

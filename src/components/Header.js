@@ -22,7 +22,9 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
   const openPlayerWithAuth = async () => {
     try {
       const server = 'https://vrplayer.cgraaaj.in';
-      console.log('🎬 Opening Jellyfin Player with authentication...');
+      const isDev = process.env.REACT_APP_ENV === 'development' || process.env.NODE_ENV === 'development';
+      
+      console.log(`🎬 Opening Jellyfin Player (${isDev ? 'dev' : 'prod'} mode)...`);
       
       // Open a new window/tab for Jellyfin
       const jellyfinWindow = window.open('about:blank', '_blank');
@@ -32,50 +34,55 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
         return;
       }
       
-      try {
-        // Authenticate with Jellyfin API (same logic as PopcornPal)
-        console.log('🔐 Authenticating with Jellyfin...');
-        const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-                         'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
-          },
-          body: JSON.stringify({
-            Username: 'anonymous',
-            Pw: 'anonymous@jelly'
-          })
-        });
-        
-        if (!authResponse.ok) {
-          throw new Error(`Authentication failed: ${authResponse.status}`);
+      if (isDev) {
+        // Development mode: Use token-login approach
+        try {
+          console.log('🔐 Dev mode: Authenticating with Jellyfin...');
+          const authResponse = await fetch(`${server}/Users/AuthenticateByName`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Emby-Authorization': 'MediaBrowser Client="MediaRadar", Device="WebApp", DeviceId="media-radar-web", Version="1.0.0"'
+            },
+            body: JSON.stringify({
+              Username: 'anonymous',
+              Pw: 'anonymous@jelly'
+            })
+          });
+          
+          if (!authResponse.ok) {
+            throw new Error(`Authentication failed: ${authResponse.status}`);
+          }
+          
+          const authData = await authResponse.json();
+          console.log('✅ Dev mode: Authentication successful');
+          
+          // Use token-login.html for authentication
+          const tokenLoginUrl = `${server}/web/token-login.html?` +
+            `token=${encodeURIComponent(authData.AccessToken)}&` +
+            `userId=${encodeURIComponent(authData.User.Id)}`;
+          
+          jellyfinWindow.location.href = tokenLoginUrl;
+          
+          toast.success('🎥 Opening Jellyfin Player (Dev Mode)!', {
+            autoClose: 3000
+          });
+          
+        } catch (error) {
+          console.error('❌ Dev mode auth failed:', error);
+          // Fallback to manual login
+          jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
+          toast.warning('⚠️ Dev auth failed. Please login manually.', {
+            autoClose: 5000
+          });
         }
-        
-        const authData = await authResponse.json();
-        console.log('✅ Authentication successful');
-        
-        // Use token-login.html for authentication (without movieId since we're going to home)
-        const tokenLoginUrl = `${server}/web/token-login.html?` +
-          `token=${encodeURIComponent(authData.AccessToken)}&` +
-          `userId=${encodeURIComponent(authData.User.Id)}`;
-        
-        console.log('🌉 Redirecting to token login page:', tokenLoginUrl);
-        
-        // Redirect the popup to token login page
-        jellyfinWindow.location.href = tokenLoginUrl;
-        
-        toast.success('🎥 Opening Jellyfin Player!', {
-          autoClose: 3000
-        });
-        
-      } catch (error) {
-        console.error('❌ Player auth failed:', error);
-        
-        // Fallback: redirect to manual login
+      } else {
+        // Production mode: Direct to login page
+        console.log('🔒 Prod mode: Redirecting to secure login');
         jellyfinWindow.location.href = `${server}/web/index.html#!/login.html`;
         
-        toast.warning('⚠️ Please login manually. Username: anonymous, Password: anonymous@jelly', {
-          autoClose: 5000
+        toast.info('🔐 Opening Jellyfin Player (Secure Login)', {
+          autoClose: 3000
         });
       }
       
