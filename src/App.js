@@ -25,10 +25,18 @@ function App() {
     hasPrevPage: false
   });
   
+  // Track the page being loaded (for displaying correct page number during loading)
+  const [loadingPage, setLoadingPage] = useState(1);
+  
   // Search-related state
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [searchInfo, setSearchInfo] = useState(null);
+  
+  // Top releases and recently added state
+  const [topReleases, setTopReleases] = useState([]);
+  const [recentlyAdded, setRecentlyAdded] = useState([]);
+  const [loadingSpecialSections, setLoadingSpecialSections] = useState(true);
 
   // Simplified initial load
   useEffect(() => {
@@ -53,6 +61,7 @@ function App() {
 
   const fetchMovies = useCallback(async (page = 1) => {
     try {
+      setLoadingPage(page);  // Set the page being loaded
       setLoading(true);
       setError(null);
       
@@ -96,6 +105,7 @@ function App() {
 
   const fetchTvShows = useCallback(async (page = 1) => {
     try {
+      setLoadingPage(page);  // Set the page being loaded
       setLoading(true);
       setError(null);
       
@@ -136,6 +146,47 @@ function App() {
       setLoading(false);
     }
   }, []);
+
+  // Fetch top releases (movies released this week)
+  const fetchTopReleases = useCallback(async () => {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const response = await axios.get(`${apiBaseUrl}/movies/top-releases?limit=5`);
+      
+      if (response.data.movies) {
+        setTopReleases(response.data.movies);
+        console.log(`🔥 Loaded ${response.data.movies.length} top releases`);
+      }
+    } catch (err) {
+      console.error('Error fetching top releases:', err);
+      setTopReleases([]);
+    }
+  }, []);
+
+  // Fetch recently added movies
+  const fetchRecentlyAdded = useCallback(async () => {
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const response = await axios.get(`${apiBaseUrl}/movies/recently-added?limit=20`);
+      
+      if (response.data.movies) {
+        setRecentlyAdded(response.data.movies);
+        console.log(`📅 Loaded ${response.data.movies.length} recently added`);
+      }
+    } catch (err) {
+      console.error('Error fetching recently added:', err);
+      setRecentlyAdded([]);
+    }
+  }, []);
+
+  // Fetch top releases when Movies tab is active and not in search mode
+  useEffect(() => {
+    if (activeTab === 'Movies' && !isSearchMode) {
+      setLoadingSpecialSections(true);
+      fetchTopReleases()
+        .finally(() => setLoadingSpecialSections(false));
+    }
+  }, [activeTab, isSearchMode, fetchTopReleases]);
 
   const fetchContent = useCallback(async (page = 1) => {
     if (activeTab === 'Movies') {
@@ -298,7 +349,7 @@ function App() {
         {loading && (
           <div className="loading">
             <div className="loading-spinner"></div>
-            <p>Loading {activeTab.toLowerCase()}... {pagination.currentPage > 1 && `(Page ${pagination.currentPage})`}</p>
+            <p>Loading {activeTab.toLowerCase()}... {loadingPage > 1 && `(Page ${loadingPage})`}</p>
           </div>
         )}
         
@@ -330,6 +381,26 @@ function App() {
             <TorrentHealthOverview />
             
             {/* <RedisDataAnalyzer /> */}
+            
+            {/* Top Releases Section - Only show for Movies tab and not in search mode */}
+            {activeTab === 'Movies' && !isSearchMode && (
+              <>
+                {/* Top Releases Section */}
+                {topReleases.length > 0 && (
+                  <div className="special-section">
+                    <h3 className="section-title">🔥 Top Releases This Week</h3>
+                    <MovieGrid movies={topReleases} />
+                  </div>
+                )}
+                
+                {/* Divider before main collection */}
+                {topReleases.length > 0 && (
+                  <div className="section-divider">
+                    <h3 className="section-title">🎬 All Movies</h3>
+                  </div>
+                )}
+              </>
+            )}
             
             <MovieGrid movies={activeTab === 'Movies' ? movies : tvShows} />
             {renderPagination()}
