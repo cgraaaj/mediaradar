@@ -37,6 +37,9 @@ function App() {
   const [topReleases, setTopReleases] = useState([]);
   const [recentlyAdded, setRecentlyAdded] = useState([]);
   const [loadingSpecialSections, setLoadingSpecialSections] = useState(true);
+  
+  // Language filter state
+  const [selectedLanguage, setSelectedLanguage] = useState('all');
 
   // Simplified initial load
   useEffect(() => {
@@ -58,6 +61,13 @@ function App() {
       setSearchInfo(null);
     }
   }, [activeTab]); // Only depend on activeTab
+  
+  // Reload movies when language filter changes
+  useEffect(() => {
+    if (activeTab === 'Movies' && !isSearchMode) {
+      fetchMovies(1);
+    }
+  }, [selectedLanguage, activeTab, isSearchMode, fetchMovies]);
 
   const fetchMovies = useCallback(async (page = 1) => {
     try {
@@ -65,11 +75,12 @@ function App() {
       setLoading(true);
       setError(null);
       
-      console.log(`Fetching movies for page ${page}`);
+      console.log(`Fetching movies for page ${page}`, selectedLanguage !== 'all' ? `with language: ${selectedLanguage}` : '');
       
       // Fetch from backend API with pagination
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
-      const response = await axios.get(`${apiBaseUrl}/movies?page=${page}&limit=20`);
+      const languageParam = selectedLanguage !== 'all' ? `&language=${selectedLanguage}` : '';
+      const response = await axios.get(`${apiBaseUrl}/movies?page=${page}&limit=20${languageParam}`);
       
       if (response.data.movies) {
         setMovies(response.data.movies);
@@ -101,7 +112,7 @@ function App() {
       });
       setLoading(false);
     }
-  }, []);
+  }, [selectedLanguage]);
 
   const fetchTvShows = useCallback(async (page = 1) => {
     try {
@@ -377,6 +388,32 @@ function App() {
                 )}
               </div>
             </div>
+            
+            {/* Language Filter - Only show for Movies tab and not in search mode */}
+            {activeTab === 'Movies' && !isSearchMode && (
+              <div className="filters-bar">
+                <div className="filter-group">
+                  <label htmlFor="language-filter" className="filter-label">
+                    🌐 Language:
+                  </label>
+                  <select
+                    id="language-filter"
+                    className="filter-select"
+                    value={selectedLanguage}
+                    onChange={(e) => setSelectedLanguage(e.target.value)}
+                  >
+                    <option value="all">All Languages</option>
+                    <option value="tamil">Tamil</option>
+                    <option value="telugu">Telugu</option>
+                    <option value="kannada">Kannada</option>
+                    <option value="malayalam">Malayalam</option>
+                    <option value="hindi">Hindi</option>
+                    <option value="english">English</option>
+                    <option value="others">Others</option>
+                  </select>
+                </div>
+              </div>
+            )}
             
             <TorrentHealthOverview />
             
