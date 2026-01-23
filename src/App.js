@@ -151,7 +151,7 @@ function App() {
   const fetchTopReleases = useCallback(async () => {
     try {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
-      const response = await axios.get(`${apiBaseUrl}/movies/top-releases?limit=5`);
+      const response = await axios.get(`${apiBaseUrl}/movies/top-releases`);
       
       if (response.data.movies) {
         setTopReleases(response.data.movies);
