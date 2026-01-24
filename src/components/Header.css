@@ -50,7 +50,7 @@
   gap: 30px;
 }
 
-.genre-control, .sort-control {
+.language-control, .genre-control, .sort-control {
   display: flex;
   align-items: center;
   gap: 10px;

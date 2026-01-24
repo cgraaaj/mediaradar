@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './Header.css';
 import { toast } from 'react-toastify';
 
-const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
+const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setSelectedLanguage }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
@@ -114,6 +114,26 @@ const Header = ({ activeTab, setActiveTab, onSearchClick }) => {
         </nav>
         
         <div className="controls">
+          {activeTab === 'Movies' && selectedLanguage && setSelectedLanguage && (
+            <div className="language-control">
+              <span className="control-label">Language</span>
+              <select 
+                value={selectedLanguage} 
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="control-select"
+              >
+                <option value="all">All</option>
+                <option value="tamil">Tamil</option>
+                <option value="telugu">Telugu</option>
+                <option value="kannada">Kannada</option>
+                <option value="malayalam">Malayalam</option>
+                <option value="hindi">Hindi</option>
+                <option value="english">English</option>
+                <option value="others">Others</option>
+              </select>
+            </div>
+          )}
+          
           <div className="genre-control">
             <span className="control-label">Genre</span>
             <select 

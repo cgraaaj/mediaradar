@@ -61,13 +61,6 @@ function App() {
       setSearchInfo(null);
     }
   }, [activeTab]); // Only depend on activeTab
-  
-  // Reload movies when language filter changes
-  useEffect(() => {
-    if (activeTab === 'Movies' && !isSearchMode) {
-      fetchMovies(1);
-    }
-  }, [selectedLanguage, activeTab, isSearchMode, fetchMovies]);
 
   const fetchMovies = useCallback(async (page = 1) => {
     try {
@@ -198,6 +191,13 @@ function App() {
         .finally(() => setLoadingSpecialSections(false));
     }
   }, [activeTab, isSearchMode, fetchTopReleases]);
+  
+  // Reload movies when language filter changes
+  useEffect(() => {
+    if (activeTab === 'Movies' && !isSearchMode) {
+      fetchMovies(1);
+    }
+  }, [selectedLanguage, activeTab, isSearchMode, fetchMovies]);
 
   const fetchContent = useCallback(async (page = 1) => {
     if (activeTab === 'Movies') {
@@ -347,6 +347,8 @@ function App() {
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         onSearchClick={handleSearchClick}
+        selectedLanguage={selectedLanguage}
+        setSelectedLanguage={setSelectedLanguage}
       />
       
       <SearchModal
@@ -388,32 +390,6 @@ function App() {
                 )}
               </div>
             </div>
-            
-            {/* Language Filter - Only show for Movies tab and not in search mode */}
-            {activeTab === 'Movies' && !isSearchMode && (
-              <div className="filters-bar">
-                <div className="filter-group">
-                  <label htmlFor="language-filter" className="filter-label">
-                    🌐 Language:
-                  </label>
-                  <select
-                    id="language-filter"
-                    className="filter-select"
-                    value={selectedLanguage}
-                    onChange={(e) => setSelectedLanguage(e.target.value)}
-                  >
-                    <option value="all">All Languages</option>
-                    <option value="tamil">Tamil</option>
-                    <option value="telugu">Telugu</option>
-                    <option value="kannada">Kannada</option>
-                    <option value="malayalam">Malayalam</option>
-                    <option value="hindi">Hindi</option>
-                    <option value="english">English</option>
-                    <option value="others">Others</option>
-                  </select>
-                </div>
-              </div>
-            )}
             
             <TorrentHealthOverview />
             
