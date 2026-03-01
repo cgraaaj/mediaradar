@@ -96,7 +96,7 @@ ingressRoute:
         - name: 
           port: 80
   tls:
-    secretName: "mediaradar-cgraaaj-in-tls"
+    secretName: "wildcard-cgraaaj-in-tls"
 
 # Vault Agent Injector Configuration
 # Enable Vault Agent Injector for secret management
