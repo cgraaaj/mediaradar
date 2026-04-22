@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './Header.css';
 import { toast } from 'react-toastify';
 
-const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setSelectedLanguage }) => {
+const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setSelectedLanguage, selectedSource, setSelectedSource }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
@@ -114,6 +114,22 @@ const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setS
         </nav>
         
         <div className="controls">
+          {(activeTab === 'Movies' || activeTab === 'TV Shows') && setSelectedSource && (
+            <div className="source-control">
+              <span className="control-label">Source</span>
+              <select
+                value={selectedSource || 'all'}
+                onChange={(e) => setSelectedSource(e.target.value)}
+                className="control-select"
+                title="Filter by data source"
+              >
+                <option value="all">All Sources</option>
+                <option value="1tamilmv">1TamilMV</option>
+                <option value="hdhub4u">HDHub4u</option>
+              </select>
+            </div>
+          )}
+
           {activeTab === 'Movies' && selectedLanguage && setSelectedLanguage && (
             <div className="language-control">
               <span className="control-label">Language</span>

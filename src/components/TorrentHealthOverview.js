@@ -5,7 +5,8 @@ import './TorrentHealthOverview.css';
 const TorrentHealthOverview = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isVisible, setIsVisible] = useState(false);
+  const [error, setError] = useState(null);
+  const [isVisible, setIsVisible] = useState(true);  // Start visible
 
   useEffect(() => {
     fetchTorrentStats();
@@ -13,12 +14,19 @@ const TorrentHealthOverview = () => {
 
   const fetchTorrentStats = async () => {
     try {
-      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
-      const response = await axios.get(`${apiBaseUrl}/api/torrent-stats`);
+      setError(null);
+      // Use same API base URL pattern as rest of app
+      // REACT_APP_API_BASE_URL already includes /api, so just append the endpoint
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+      const url = `${apiBaseUrl}/torrent-stats`;
+      console.log('Fetching torrent stats from:', url);
+      const response = await axios.get(url);
+      console.log('Torrent stats response:', response.data);
       setStats(response.data);
       setLoading(false);
-    } catch (error) {
-      console.error('Failed to fetch torrent stats:', error);
+    } catch (err) {
+      console.error('Failed to fetch torrent stats:', err);
+      setError(err.message || 'Failed to load stats');
       setLoading(false);
     }
   };
@@ -28,6 +36,19 @@ const TorrentHealthOverview = () => {
       <div className="torrent-overview loading">
         <div className="loading-spinner-small"></div>
         <span>Loading torrent stats...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="torrent-overview">
+        <div className="stats-panel" style={{ padding: '15px', color: '#ff6b6b' }}>
+          <span>⚠️ Torrent stats unavailable: {error}</span>
+          <button onClick={fetchTorrentStats} className="refresh-btn" style={{ marginLeft: '10px' }}>
+            🔄 Retry
+          </button>
+        </div>
       </div>
     );
   }

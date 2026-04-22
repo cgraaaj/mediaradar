@@ -4,7 +4,7 @@ import { toast } from 'react-toastify';
 import DownloadModal from './DownloadModal';
 import './SearchModal.css';
 
-const SearchModal = ({ isOpen, onClose, activeTab, onSearchResults }) => {
+const SearchModal = ({ isOpen, onClose, activeTab, onSearchResults, selectedSource }) => {
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -43,9 +43,9 @@ const SearchModal = ({ isOpen, onClose, activeTab, onSearchResults }) => {
     try {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const endpoint = activeTab === 'Movies' ? 'movies' : 'tvshows';
-      const response = await axios.get(
-        `${apiBaseUrl}/${endpoint}/search?q=${encodeURIComponent(searchQuery)}&page=${page}&limit=20`
-      );
+      const params = new URLSearchParams({ q: searchQuery, page: String(page), limit: '20' });
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const response = await axios.get(`${apiBaseUrl}/${endpoint}/search?${params.toString()}`);
 
       const results = activeTab === 'Movies' ? response.data.movies : response.data.tvShows;
       setSearchResults(results);
@@ -74,7 +74,7 @@ const SearchModal = ({ isOpen, onClose, activeTab, onSearchResults }) => {
     } finally {
       setLoading(false);
     }
-  }, [activeTab]);
+  }, [activeTab, selectedSource]);
 
   // Debounced search function
   const debouncedSearch = useCallback(

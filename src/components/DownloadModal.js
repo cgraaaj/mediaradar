@@ -1,12 +1,35 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'react-toastify';
+import axios from 'axios';
 import './DownloadModal.css';
+
+// Extract info_hash from magnet link
+const extractInfoHash = (magnetLink) => {
+  if (!magnetLink) return null;
+  try {
+    const match = magnetLink.match(/btih:([a-fA-F0-9]{40})/i);
+    return match ? match[1].toLowerCase() : null;
+  } catch {
+    return null;
+  }
+};
+
+// Calculate health status and color
+const getHealthStatus = (seeders) => {
+  if (seeders === 0 || seeders === undefined) return { status: 'DEAD', color: '#666', textColor: '#fff' };
+  if (seeders < 5) return { status: 'POOR', color: '#ff4444', textColor: '#fff' };
+  if (seeders < 20) return { status: 'FAIR', color: '#ffa500', textColor: '#000' };
+  if (seeders < 50) return { status: 'GOOD', color: '#4caf50', textColor: '#fff' };
+  return { status: 'EXCELLENT', color: '#00c853', textColor: '#fff' };
+};
 
 const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
   const [isBackdropActive, setIsBackdropActive] = useState(false);
   const [activeTab, setActiveTab] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const [torrentStats, setTorrentStats] = useState({});
+  const [loadingStats, setLoadingStats] = useState(false);
 
 
 
@@ -42,6 +65,50 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       document.body.style.overflow = 'unset';
     }
   }, [isOpen, onClose]);
+
+  // Fetch torrent stats when modal opens
+  const fetchTorrentStats = useCallback(async () => {
+    if (!movie?.downloadOptions) return;
+    
+    // Collect all info hashes from magnet links
+    const infoHashes = [];
+    Object.values(movie.downloadOptions).forEach(files => {
+      if (Array.isArray(files)) {
+        files.forEach(file => {
+          const hash = extractInfoHash(file.magnetLink);
+          if (hash) infoHashes.push(hash);
+        });
+      }
+    });
+    
+    if (infoHashes.length === 0) return;
+    
+    setLoadingStats(true);
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000/api';
+      const response = await axios.post(`${apiBaseUrl}/torrent-stats/bulk`, {
+        infoHashes: [...new Set(infoHashes)] // Remove duplicates
+      });
+      
+      if (response.data?.stats) {
+        setTorrentStats(response.data.stats);
+        console.log(`Loaded stats for ${Object.keys(response.data.stats).length} torrents`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch torrent stats:', error);
+    } finally {
+      setLoadingStats(false);
+    }
+  }, [movie?.downloadOptions]);
+
+  // Fetch stats when modal opens
+  useEffect(() => {
+    if (isOpen && movie?.downloadOptions) {
+      fetchTorrentStats();
+    } else {
+      setTorrentStats({});
+    }
+  }, [isOpen, movie?.downloadOptions, fetchTorrentStats]);
 
   // Memoize available qualities to prevent unnecessary recalculations
   const availableQualities = useMemo(() => {
@@ -120,7 +187,8 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
           title: movie.title,
           year: movie.year,
           imdbRating: movie.imdbRating,
-          tmdbRating: movie.tmdbRating
+          tmdbRating: movie.tmdbRating,
+          sources: movie.sources,
         },
         file: {
           filename: file.filename,
@@ -128,8 +196,17 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
           size: file.size,
           href: file.href,
           language: file.language,
-          releaseYear: file.releaseYear
-        }
+          releaseYear: file.releaseYear,
+          source: file.source,
+          kind: file.kind,
+          status: file.status,
+          host: file.host,
+          magnetLink: file.magnetLink,
+          torrentUrl: file.torrentUrl,
+          originalUrl: file.originalUrl,
+          finalUrl: file.finalUrl,
+          postUrl: file.postUrl,
+        },
       };
 
       const response = await fetch('https://n8n.cgraaaj.in/webhook/submit-torrent', {
@@ -326,124 +403,205 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                     <div className="modal-files-grid">
                       {(() => {
                         const filteredQualities = availableQualities.filter(([quality]) => quality === activeTab);
-                        
+
                         if (filteredQualities.length === 0) {
                           return <div style={{padding: '20px', textAlign: 'center', color: '#999'}}>No files found for {activeTab}</div>;
                         }
-                        
-                        return filteredQualities.map(([quality, files]) => {
-                          return files.map((file, index) => (
-                            <div key={`${quality}-${index}`} className="modal-download-item">
-                              <div className="modal-file-info">
-                                <div className="modal-filename-container">
-                                  <span 
-                                    className="modal-filename" 
-                                    title={`${file.originalFilename ? 'Original: ' + file.originalFilename + '\n' : ''}${file.sizeSource ? 'Size from: ' + file.sizeSource.replace('_', ' ') : ''}`}
-                                  >
-                                    {file.filename}
-                                  </span>
-                                </div>
-                                
-                                <div className="modal-file-metadata">
-                                  <span 
-                                    className="modal-file-size" 
-                                    title={`${file.sizeSource === 'redis_metadata' ? 'Size from Redis metadata' : 'Size extracted from filename'}`}
-                                  >
-                                    📁 {file.size}
-                                    {file.sizeSource === 'redis_metadata' && <span className="modal-size-verified">✓</span>}
-                                  </span>
-                                  
-                                  {file.language && (
-                                    <span className="modal-file-language" title={`Audio Language: ${file.language}`}>
-                                      🗣️ {file.language}
-                                    </span>
-                                  )}
-                                  
-                                  {file.releaseYear && (
-                                    <span className="modal-file-year" title={`Release Year: ${file.releaseYear}`}>
-                                      📅 {file.releaseYear}
-                                    </span>
-                                  )}
-                                </div>
 
-                                {/* Torrent Health Info */}
-                                {/* {file.torrentMetadata && (
-                                  <div className="modal-torrent-metadata">
-                                    <div className="modal-torrent-health">
-                                      <span 
-                                        className="modal-health-indicator"
-                                        style={{ 
-                                          backgroundColor: file.torrentMetadata.health?.color || '#4caf50',
-                                          color: 'white',
-                                          padding: '2px 6px',
-                                          borderRadius: '3px',
-                                          fontSize: '11px'
-                                        }}
-                                        title={`Health: ${file.torrentMetadata.health?.status || 'Good'}`}
-                                      >
-                                        {file.torrentMetadata.health?.status || 'GOOD'}
-                                      </span>
-                                    </div>
-                                    
-                                    <div className="modal-torrent-stats">
-                                      <span className="modal-seeders" title="Seeders">
-                                        🌱 {file.torrentMetadata.seeders || 0}
-                                      </span>
-                                      <span className="modal-leechers" title="Leechers">
-                                        📥 {file.torrentMetadata.leechers || 0}
-                                      </span>
-                                      <span className="modal-ratio" title="Seed/Leech Ratio">
-                                        📊 {file.torrentMetadata.ratio || '0.00'}
-                                      </span>
-                                    </div>
-                                    
-                                    {file.torrentMetadata.estimatedSpeed && (
-                                      <div className="modal-download-stats">
-                                        <span className="modal-speed" title="Estimated Download Speed">
-                                          ⚡ {file.torrentMetadata.estimatedSpeed}
+                        return filteredQualities.map(([quality, files]) => {
+                          return files.map((file, index) => {
+                            const isDirect = file.kind === 'direct';
+                            const isTorrent = file.kind === 'torrent';
+                            const isMagnet = file.kind === 'magnet' && !isTorrent;
+                            const cpmGated = isDirect && file.status === 'cpm_gated';
+                            const stream = isDirect && file.status === 'stream';
+                            const resolved = isDirect && file.status === 'resolved';
+                            const sourceLabel = file.sourceLabel || (file.source === '1tamilmv' ? '1TamilMV' : file.source === 'hdhub4u' ? 'HDHub4u' : file.source);
+
+                            return (
+                              <div key={`${quality}-${index}`} className={`modal-download-item file-source-${file.source || 'unknown'} file-kind-${file.kind || 'unknown'}`}>
+                                <div className="modal-file-info">
+                                  <div className="modal-filename-container">
+                                    <div className="modal-file-header-badges">
+                                      {file.source && (
+                                        <span className={`modal-source-chip chip-${file.source}`} title={`Source: ${sourceLabel}`}>
+                                          {file.source === '1tamilmv' ? '🧲' : '🔗'} {sourceLabel}
                                         </span>
-                                        {file.torrentMetadata.completed && (
-                                          <span className="modal-completed" title="Completed Downloads">
-                                            ✅ {file.torrentMetadata.completed}
-                                          </span>
-                                        )}
-                                      </div>
+                                      )}
+                                      {file.kind && (
+                                        <span className={`modal-kind-chip kind-${file.kind}`}>
+                                          {file.kind.toUpperCase()}
+                                        </span>
+                                      )}
+                                      {cpmGated && (
+                                        <span className="modal-status-chip status-cpm" title="This link is ad-gated. You'll see an ad page before the download.">
+                                          ⚠️ AD-GATED
+                                        </span>
+                                      )}
+                                      {stream && (
+                                        <span className="modal-status-chip status-stream" title="This URL streams in-browser.">
+                                          ▶️ STREAM
+                                        </span>
+                                      )}
+                                      {resolved && (
+                                        <span className="modal-status-chip status-resolved" title="Direct download link (resolved).">
+                                          ✅ DIRECT
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <span
+                                      className="modal-filename"
+                                      title={`${file.originalFilename ? 'Original: ' + file.originalFilename + '\n' : ''}${file.sizeSource ? 'Size from: ' + file.sizeSource.replace('_', ' ') + '\n' : ''}${file.postTitle ? 'Post: ' + file.postTitle : ''}`}
+                                    >
+                                      {file.filename}
+                                    </span>
+                                  </div>
+
+                                  <div className="modal-file-metadata">
+                                    <span
+                                      className="modal-file-size"
+                                      title={`${file.sizeSource === 'redis_metadata' ? 'Size from Redis metadata' : 'Size extracted from filename'}`}
+                                    >
+                                      📁 {file.size}
+                                      {file.sizeSource === 'redis_metadata' && <span className="modal-size-verified">✓</span>}
+                                    </span>
+
+                                    {file.language && (
+                                      <span className="modal-file-language" title={`Audio Language: ${file.language}`}>
+                                        🗣️ {file.language}
+                                      </span>
+                                    )}
+
+                                    {file.releaseYear && (
+                                      <span className="modal-file-year" title={`Release Year: ${file.releaseYear}`}>
+                                        📅 {file.releaseYear}
+                                      </span>
+                                    )}
+
+                                    {file.host && (
+                                      <span className="modal-file-host" title={`Delivered via ${file.host}`}>
+                                        🌐 {file.host}
+                                      </span>
+                                    )}
+
+                                    {file.label && file.label !== file.filename && (
+                                      <span className="modal-file-label" title="Post label">
+                                        🏷️ {file.label}
+                                      </span>
                                     )}
                                   </div>
-                                )} */}
-                              </div>
-                              
-                              <div className="modal-download-buttons">
-                                <div className="modal-download-grid">
-                                  <button
-                                    className="modal-download-file-btn"
-                                    onClick={(e) => handleDownloadClick(e, file.href, file.filename)}
-                                    title={`Download ${file.filename}`}
-                                  >
-                                    ⬇️ Download
-                                  </button>
-                                  
-                                  {file.magnetLink && (
-                                    <button
-                                      className="modal-magnet-btn"
-                                      onClick={(e) => handleMagnetClick(e, file.magnetLink, file.filename)}
-                                      title={`Open magnet link for ${file.filename}`}
-                                    >
-                                      🧲
-                                    </button>
-                                  )}
+
+                                  {/* Torrent Health Info – only meaningful when we have a magnet/hash */}
+                                  {(isMagnet || isTorrent || file.magnetLink) && (() => {
+                                    const infoHash = extractInfoHash(file.magnetLink);
+                                    const stats = infoHash ? torrentStats[infoHash] : null;
+                                    const health = stats ? getHealthStatus(stats.seeders) : null;
+                                    const ratio = stats && stats.leechers > 0
+                                      ? (stats.seeders / stats.leechers).toFixed(2)
+                                      : stats?.seeders > 0 ? '∞' : '0';
+
+                                    return (
+                                      <div className="modal-torrent-metadata">
+                                        {loadingStats ? (
+                                          <span className="modal-stats-loading">Loading stats...</span>
+                                        ) : stats ? (
+                                          <>
+                                            <div className="modal-torrent-health">
+                                              <span
+                                                className="modal-health-indicator"
+                                                style={{
+                                                  backgroundColor: health.color,
+                                                  color: health.textColor,
+                                                  padding: '2px 8px',
+                                                  borderRadius: '3px',
+                                                  fontSize: '11px',
+                                                  fontWeight: '600',
+                                                }}
+                                                title={`Health: ${health.status}`}
+                                              >
+                                                {health.status}
+                                              </span>
+                                            </div>
+
+                                            <div className="modal-torrent-stats">
+                                              <span className="modal-seeders" title="Seeders (people sharing)">
+                                                🌱 {stats.seeders}
+                                              </span>
+                                              <span className="modal-leechers" title="Leechers (people downloading)">
+                                                📥 {stats.leechers}
+                                              </span>
+                                              <span className="modal-ratio" title="Seed/Leech Ratio">
+                                                📊 {ratio}
+                                              </span>
+                                            </div>
+                                          </>
+                                        ) : infoHash ? (
+                                          <span className="modal-stats-unavailable" title="No stats available - torrent not yet tracked">
+                                            📊 Stats unavailable
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
-                                
-                                <button
-                                  className="modal-webhook-btn"
-                                  onClick={(e) => handleWebhookClick(e, file)}
-                                  title={`Send ${file.filename} to webhook`}
-                                >
-                                  🚀 Request movie
-                                </button>
+
+                                <div className="modal-download-buttons">
+                                  <div className="modal-download-grid">
+                                    {/* Primary action depends on kind */}
+                                    {isDirect && (
+                                      <button
+                                        className={`modal-download-file-btn ${cpmGated ? 'gated' : ''}`}
+                                        onClick={(e) => handleDownloadClick(e, file.href, file.filename)}
+                                        title={cpmGated ? 'Ad-gated: a ad-page will open first' : stream ? 'Stream in browser' : 'Open direct download'}
+                                      >
+                                        {cpmGated ? '⚠️ Open (Ad)' : stream ? '▶️ Stream' : '⬇️ Download'}
+                                      </button>
+                                    )}
+
+                                    {isTorrent && file.torrentUrl && (
+                                      <button
+                                        className="modal-download-file-btn"
+                                        onClick={(e) => handleDownloadClick(e, file.torrentUrl, file.filename)}
+                                        title={`Download .torrent file for ${file.filename}`}
+                                      >
+                                        📥 .torrent
+                                      </button>
+                                    )}
+
+                                    {file.magnetLink && (
+                                      <button
+                                        className="modal-magnet-btn"
+                                        onClick={(e) => handleMagnetClick(e, file.magnetLink, file.filename)}
+                                        title={`Open magnet link for ${file.filename}`}
+                                      >
+                                        🧲 Magnet
+                                      </button>
+                                    )}
+
+                                    {/* For direct links, expose the post URL as a secondary action */}
+                                    {isDirect && file.postUrl && (
+                                      <button
+                                        className="modal-post-btn"
+                                        onClick={(e) => handleDownloadClick(e, file.postUrl, file.filename)}
+                                        title="Open the source post page"
+                                      >
+                                        🔗 Post
+                                      </button>
+                                    )}
+                                  </div>
+
+                                  <button
+                                    className="modal-webhook-btn"
+                                    onClick={(e) => handleWebhookClick(e, file)}
+                                    title={`Send ${file.filename} to webhook`}
+                                  >
+                                    🚀 Request movie
+                                  </button>
+                                </div>
                               </div>
-                            </div>
-                          ));
+                            );
+                          });
                         });
                       })()}
                     </div>

@@ -106,7 +106,7 @@ const MovieCard = ({ movie }) => {
           style={{ display: imageLoading ? 'none' : 'block' }}
         />
         
-        {/* Data source indicator */}
+        {/* Data source indicator (TMDB / OMDb) */}
         {movie.dataSource === 'tmdb' && (
           <div className="source-badge tmdb">
             <span>🎬 TMDB</span>
@@ -115,6 +115,21 @@ const MovieCard = ({ movie }) => {
         {movie.dataSource === 'omdb' && (
           <div className="source-badge omdb">
             <span>📽️ IMDb</span>
+          </div>
+        )}
+
+        {/* Download source indicator(s) (1TamilMV / HDHub4u) */}
+        {Array.isArray(movie.sources) && movie.sources.length > 0 && (
+          <div className="download-sources">
+            {movie.sources.map((src) => (
+              <span
+                key={src}
+                className={`download-source-badge source-${src}`}
+                title={`Downloads from ${src === '1tamilmv' ? '1TamilMV' : src === 'hdhub4u' ? 'HDHub4u' : src}`}
+              >
+                {src === '1tamilmv' ? '🧲 1TamilMV' : src === 'hdhub4u' ? '🔗 HDHub4u' : src}
+              </span>
+            ))}
           </div>
         )}
         

@@ -41,6 +41,9 @@ function App() {
   // Language filter state
   const [selectedLanguage, setSelectedLanguage] = useState('all');
 
+  // Source filter state (Redis cache ships with multiple sources: 1tamilmv, hdhub4u)
+  const [selectedSource, setSelectedSource] = useState('all');
+
   // Simplified initial load
   useEffect(() => {
     console.log('Initial load effect triggered for tab:', activeTab);
@@ -68,12 +71,13 @@ function App() {
       setLoading(true);
       setError(null);
       
-      console.log(`Fetching movies for page ${page}`, selectedLanguage !== 'all' ? `with language: ${selectedLanguage}` : '');
-      
-      // Fetch from backend API with pagination
+      console.log(`Fetching movies for page ${page}`, selectedLanguage !== 'all' ? `with language: ${selectedLanguage}` : '', selectedSource !== 'all' ? `source: ${selectedSource}` : '');
+
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
-      const languageParam = selectedLanguage !== 'all' ? `&language=${selectedLanguage}` : '';
-      const response = await axios.get(`${apiBaseUrl}/movies?page=${page}&limit=20${languageParam}`);
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (selectedLanguage && selectedLanguage !== 'all') params.set('language', selectedLanguage);
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const response = await axios.get(`${apiBaseUrl}/movies?${params.toString()}`);
       
       if (response.data.movies) {
         setMovies(response.data.movies);
@@ -105,7 +109,7 @@ function App() {
       });
       setLoading(false);
     }
-  }, [selectedLanguage]);
+  }, [selectedLanguage, selectedSource]);
 
   const fetchTvShows = useCallback(async (page = 1) => {
     try {
@@ -113,11 +117,12 @@ function App() {
       setLoading(true);
       setError(null);
       
-      console.log(`Fetching TV shows for page ${page}`);
-      
-      // Fetch from backend API with pagination
+      console.log(`Fetching TV shows for page ${page}`, selectedSource !== 'all' ? `source: ${selectedSource}` : '');
+
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
-      const response = await axios.get(`${apiBaseUrl}/tvshows?page=${page}&limit=20`);
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const response = await axios.get(`${apiBaseUrl}/tvshows?${params.toString()}`);
       
       if (response.data.tvShows) {
         setTvShows(response.data.tvShows);
@@ -149,13 +154,18 @@ function App() {
       });
       setLoading(false);
     }
-  }, []);
+  }, [selectedSource]);
 
   // Fetch top releases (movies released this week)
   const fetchTopReleases = useCallback(async () => {
     try {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
-      const response = await axios.get(`${apiBaseUrl}/movies/top-releases`);
+      const params = new URLSearchParams();
+      if (selectedSource && selectedSource !== 'all') params.set('source', selectedSource);
+      const url = params.toString()
+        ? `${apiBaseUrl}/movies/top-releases?${params.toString()}`
+        : `${apiBaseUrl}/movies/top-releases`;
+      const response = await axios.get(url);
       
       if (response.data.movies) {
         setTopReleases(response.data.movies);
@@ -165,7 +175,7 @@ function App() {
       console.error('Error fetching top releases:', err);
       setTopReleases([]);
     }
-  }, []);
+  }, [selectedSource]);
 
   // Fetch recently added movies
   const fetchRecentlyAdded = useCallback(async () => {
@@ -192,12 +202,19 @@ function App() {
     }
   }, [activeTab, isSearchMode, fetchTopReleases]);
   
-  // Reload movies when language filter changes
+  // Reload movies when language or source filter changes
   useEffect(() => {
     if (activeTab === 'Movies' && !isSearchMode) {
       fetchMovies(1);
     }
-  }, [selectedLanguage, activeTab, isSearchMode, fetchMovies]);
+  }, [selectedLanguage, selectedSource, activeTab, isSearchMode, fetchMovies]);
+
+  // Reload tv shows when source filter changes
+  useEffect(() => {
+    if (activeTab === 'TV Shows' && !isSearchMode) {
+      fetchTvShows(1);
+    }
+  }, [selectedSource, activeTab, isSearchMode, fetchTvShows]);
 
   const fetchContent = useCallback(async (page = 1) => {
     if (activeTab === 'Movies') {
@@ -349,6 +366,8 @@ function App() {
         onSearchClick={handleSearchClick}
         selectedLanguage={selectedLanguage}
         setSelectedLanguage={setSelectedLanguage}
+        selectedSource={selectedSource}
+        setSelectedSource={setSelectedSource}
       />
       
       <SearchModal
@@ -356,6 +375,7 @@ function App() {
         onClose={handleSearchModalClose}
         activeTab={activeTab}
         onSearchResults={handleSearchResults}
+        selectedSource={selectedSource}
       />
       
       <main className="main-content">
