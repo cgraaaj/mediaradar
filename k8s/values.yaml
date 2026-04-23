@@ -92,6 +92,12 @@ ingressRoute:
   routes:
     - match: Host(`mediaradar.cgraaaj.in`) && PathPrefix(`/`)
       kind: Rule
+      # Authentik forward-auth via the embedded-outpost Middleware CRD.
+      # Domain-level provider (cookie_domain=cgraaaj.in) gives SSO across
+      # all *.cgraaaj.in apps once logged in at auth.dev.cgraaaj.in.
+      middlewares:
+        - name: ak-outpost-authentik-embedded-outpost
+          namespace: authentik
       services:
         - name: 
           port: 80
