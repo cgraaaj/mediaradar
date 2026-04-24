@@ -30,23 +30,21 @@ async function get(path, params) {
  * ---------------------
  * [resource, scope, params]
  *   resource: 'movies' | 'tvshows'
- *   scope:    'list' | 'search' | 'top' | 'recent'
+ *   scope:    'list' | 'search'
  *   params:   normalised object (nulls stripped). Putting params at the tail
  *             gives us cheap prefix-based invalidation, e.g.
  *             queryClient.invalidateQueries({ queryKey: ['movies'] })
  *             wipes all movie surfaces at once.
  */
 
-/** Movies grid (paginated). `cold` by default, `hot`/`warm` as tier hint. */
+/** Movies grid (paginated). Tier dropdown drives hot/cold/warm routing. */
 export function useMoviesQuery({ page, limit = 20, language, source, tier, enabled = true }) {
   const params = { page, limit, language, source, tier };
   return useQuery({
     queryKey: ['movies', 'list', params],
     queryFn: () => get('/movies', params),
     enabled,
-    // Keep the previous page's data visible during the next page's fetch.
-    // This is the single biggest UX win from moving to TanStack Query —
-    // pagination flips stop flashing blank grids.
+    // Keep previous page data visible during the next page's fetch.
     placeholderData: keepPreviousData,
   });
 }
@@ -59,25 +57,5 @@ export function useTvShowsQuery({ page, limit = 20, source, tier, enabled = true
     queryFn: () => get('/tvshows', params),
     enabled,
     placeholderData: keepPreviousData,
-  });
-}
-
-/** "🔥 Top Releases" — always hot tier unless explicitly overridden server-side. */
-export function useTopReleasesQuery({ source, limit = 10, enabled = true }) {
-  const params = { source, limit };
-  return useQuery({
-    queryKey: ['movies', 'top', params],
-    queryFn: () => get('/movies/top-releases', params),
-    enabled,
-  });
-}
-
-/** "🆕 Recently Added" — hot tier. */
-export function useRecentlyAddedQuery({ source, limit = 20, enabled = true }) {
-  const params = { source, limit };
-  return useQuery({
-    queryKey: ['movies', 'recent', params],
-    queryFn: () => get('/movies/recently-added', params),
-    enabled,
   });
 }

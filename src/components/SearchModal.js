@@ -160,15 +160,21 @@ const SearchModal = ({ isOpen, onClose, activeTab, onSearchResults, selectedSour
           </div>
         
         <div className="search-input-container">
-          <input
-            type="text"
-            value={query}
-            onChange={handleSearchChange}
-            placeholder={`Search ${activeTab.toLowerCase()} by title, language, genre...`}
-            className="search-input"
-            autoFocus
-          />
-          {loading && <div className="search-loading">🔄</div>}
+          <div className="search-input-wrapper">
+            <input
+              type="text"
+              value={query}
+              onChange={handleSearchChange}
+              placeholder={`Search ${activeTab.toLowerCase()} by title, language, genre...`}
+              className="search-input"
+              autoFocus
+            />
+            {loading && (
+              <span className="search-loading" aria-label="Searching" role="status">
+                <span className="search-spinner" />
+              </span>
+            )}
+          </div>
         </div>
 
         {error && (

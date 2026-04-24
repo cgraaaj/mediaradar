@@ -61,7 +61,16 @@
 .search-input-container {
   padding: 20px 24px;
   border-bottom: 1px solid #333;
+}
+
+/* Inner wrapper is the spinner's positioning context — it tracks the
+   input's exact bounding box so absolute positioning always lands inside
+   the border. The previous setup positioned the spinner against the
+   outer container, which included the container padding and pushed the
+   glyph onto the rounded edge of the input. */
+.search-input-wrapper {
   position: relative;
+  width: 100%;
 }
 
 .search-input {
@@ -69,11 +78,13 @@
   background: #2a2a2a;
   border: 2px solid #444;
   border-radius: 8px;
-  padding: 12px 16px;
+  /* Reserve space on the right so the text never slides under the spinner. */
+  padding: 12px 44px 12px 16px;
   color: #fff;
   font-size: 16px;
   outline: none;
   transition: border-color 0.3s ease;
+  box-sizing: border-box;
   box-sizing: border-box;
 }
 
@@ -87,17 +98,32 @@
 
 .search-loading {
   position: absolute;
-  right: 40px;
+  right: 14px;
   top: 50%;
   transform: translateY(-50%);
-  color: #4a9eff;
-  font-size: 18px;
-  animation: spin 1s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
+/* CSS border spinner. Using an emoji like 🔄 was the original cause of the
+   clipping bug — emoji glyph metrics vary across fonts/platforms and the
+   actual rendered bounding box often exceeds the font-size, so the spinner
+   would visually spill past the input's rounded corner. */
+.search-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(74, 158, 255, 0.25);
+  border-top-color: #4a9eff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: translateY(-50%) rotate(0deg); }
-  to { transform: translateY(-50%) rotate(360deg); }
+  to { transform: rotate(360deg); }
 }
 
 .search-error {

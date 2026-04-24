@@ -1,36 +1,55 @@
 .header {
   background-color: #1a1a1a;
-  border-bottom: 1px solid #333;
-  padding: 15px 0;
+  border-bottom: 1px solid #2a2a2a;
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
-.header-content {
+/* A header-row is a full-width band. Two bands stack:
+   row-primary  = tabs + quick actions
+   row-filters  = Catalog / Source / Language dropdowns */
+.header-row {
   max-width: 1400px;
   margin: 0 auto;
+  padding: 0 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
+  gap: 16px;
 }
 
+.header-row-primary {
+  justify-content: space-between;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+
+.header-row-filters {
+  padding-bottom: 12px;
+  padding-top: 4px;
+  flex-wrap: wrap;
+  border-top: 1px solid #222;
+  margin-top: 0;
+}
+
+/* -- Tabs ------------------------------------------------------------- */
 .main-nav {
   display: flex;
-  gap: 0;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .nav-tab {
   background: none;
   border: none;
   color: #888;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
-  padding: 12px 20px;
+  padding: 10px 16px;
   cursor: pointer;
-  border-bottom: 3px solid transparent;
-  transition: all 0.3s ease;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s ease, border-color 0.2s ease;
+  white-space: nowrap;
 }
 
 .nav-tab.active {
@@ -42,64 +61,71 @@
   color: #ccc;
 }
 
-
-
-.controls {
-  display: flex;
+/* -- Filters ---------------------------------------------------------- */
+.filter {
+  display: inline-flex;
   align-items: center;
-  gap: 30px;
+  gap: 8px;
+  /* Each filter is a label + select. Using <label> lets users click the
+     label text to focus the select — tiny accessibility win. */
 }
 
-.language-control, .genre-control, .sort-control, .source-control {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.control-label {
+.filter-label {
   color: #888;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
-.control-select {
+.filter-select {
   background-color: #2a2a2a;
-  border: 1px solid #444;
+  border: 1px solid #3a3a3a;
   color: #fff;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 6px 28px 6px 12px;
+  border-radius: 6px;
   font-size: 14px;
+  line-height: 1.2;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.3s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+  /* Custom chevron — keeps the caret in a predictable spot regardless of OS. */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='%23888' d='M0 0l5 6 5-6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
 }
 
-.control-select:hover {
-  border-color: #666;
+.filter-select:hover {
+  border-color: #555;
+  background-color: #323232;
 }
 
-.control-select:focus {
+.filter-select:focus {
   border-color: #4a9eff;
 }
 
+/* -- Action icons ----------------------------------------------------- */
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
 }
 
 .action-btn {
   background: none;
   border: none;
   color: #888;
-  font-size: 18px;
-  padding: 8px;
+  font-size: 17px;
+  padding: 6px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.3s ease;
-  width: 36px;
-  height: 36px;
-  display: flex;
+  border-radius: 6px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 }
@@ -109,25 +135,35 @@
   color: #fff;
 }
 
+/* -- Responsive ------------------------------------------------------- */
 @media (max-width: 768px) {
-  .header-content {
+  .header-row {
+    padding: 0 12px;
+    gap: 12px;
+  }
+
+  .header-row-primary {
     flex-wrap: wrap;
-    gap: 15px;
   }
-  
-  .controls {
-    order: 3;
-    flex-basis: 100%;
-    justify-content: center;
+
+  .nav-tab {
+    padding: 8px 10px;
+    font-size: 14px;
   }
-  
+
+  .filter-label {
+    display: none;
+    /* On narrow screens the labels chew valuable horizontal space;
+       the select's selected value is self-describing enough. */
+  }
+
   .header-actions {
-    gap: 5px;
+    gap: 2px;
   }
-  
+
   .action-btn {
-    font-size: 16px;
-    width: 32px;
-    height: 32px;
+    font-size: 15px;
+    width: 30px;
+    height: 30px;
   }
-} 
+}

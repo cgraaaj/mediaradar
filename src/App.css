@@ -40,6 +40,13 @@ body {
   font-weight: 600;
 }
 
+.movies-header-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .header-info {
   display: flex;
   flex-direction: column;

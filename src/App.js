@@ -10,33 +10,39 @@ import PopcornPal from './components/PopcornPal';
 import {
   useMoviesQuery,
   useTvShowsQuery,
-  useTopReleasesQuery,
-  useRecentlyAddedQuery,
 } from './hooks/useMediaQueries';
 
-// Map a resolved tier to a short user-facing label + tooltip prefix.
-// "latest" and "all" describe the *section* calling us; the function uses
-// that context to pick the right verbiage for fallback cases.
-function tierLabel(tier, context /* 'latest' | 'all' */) {
-  if (tier === 'warm') return '🌡️ Union (hot ∪ cold)';
-  if (tier === 'hot') return context === 'latest' ? '⚡ Latest' : '⚡ Hot fallback';
-  if (tier === 'cold') return context === 'latest' ? '🧊 Cold fallback' : '🧊 Full Catalog';
-  return '🗄️ Legacy';
+// Section title + tier badge copy are both driven off the selected tier.
+// The grid is now a single surface — no more "Top Releases" / "Recently
+// Added" slicing, since the Catalog dropdown already lets users pick
+// between the latest (hot) and the full catalog (cold).
+const TIER_COPY = {
+  hot:    { title: '⚡ Latest Releases',  badge: '⚡ Hot' },
+  cold:   { title: '🎬 All {kind}',        badge: '🧊 Full Catalog' },
+  warm:   { title: '🌡️ Combined Catalog', badge: '🌡️ Union' },
+  legacy: { title: '🗄️ Catalog',          badge: '🗄️ Legacy' },
+};
+
+function formatTitle(tier, activeTab) {
+  const kind = activeTab === 'Movies' ? 'Movies' : 'TV Shows';
+  const template = (TIER_COPY[tier] || TIER_COPY.cold).title;
+  return template.replace('{kind}', kind);
 }
 
 // Small presentational helper: renders the tier badge + tooltip.
-function TierBadge({ meta, context }) {
+function TierBadge({ meta }) {
   if (!meta?.tier) return null;
   const { tier, cacheKey, cacheMetadata } = meta;
   const lastUpdated = cacheMetadata?.lastUpdated
     ? ' · updated ' + new Date(cacheMetadata.lastUpdated).toLocaleString()
     : '';
+  const label = (TIER_COPY[tier] || TIER_COPY.legacy).badge;
   return (
     <span
       className={`tier-badge tier-${tier}`}
       title={`Served from ${cacheKey || 'cache'}${lastUpdated}`}
     >
-      {tierLabel(tier, context)}
+      {label}
     </span>
   );
 }
@@ -94,16 +100,6 @@ function App() {
     enabled: activeTab === 'TV Shows' && !isSearchMode,
   });
 
-  const topReleasesQuery = useTopReleasesQuery({
-    source: selectedSource,
-    enabled: activeTab === 'Movies' && !isSearchMode,
-  });
-
-  const recentlyAddedQuery = useRecentlyAddedQuery({
-    source: selectedSource,
-    enabled: activeTab === 'Movies' && !isSearchMode,
-  });
-
   // -- Derived view data -----------------------------------------------------
 
   // Pick the active grid query (movies vs tvshows) for the main grid.
@@ -128,14 +124,7 @@ function App() {
   }, [isSearchMode, searchInfo, activeQuery.data, page]);
 
   // Tier metadata for the UI badges (tier / cacheKey / cacheMetadata).
-  const allTierMeta = activeQuery.data?.metadata || null;
-  // "Latest" section metadata — prefer the top-releases query, fall back
-  // to recently-added. Both are backed by the same `:hot` tier so either
-  // is fine for badging.
-  const latestTierMeta = topReleasesQuery.data?.metadata || recentlyAddedQuery.data?.metadata || null;
-
-  const topReleases = topReleasesQuery.data?.movies || [];
-  const recentlyAdded = recentlyAddedQuery.data?.movies || [];
+  const tierMeta = activeQuery.data?.metadata || null;
 
   // Show the spinner only on the first load. Subsequent page flips keep the
   // old grid visible (thanks to `keepPreviousData`) while the new page
@@ -257,9 +246,14 @@ function App() {
         {!isInitialLoading && items.length > 0 && (activeTab === 'Movies' || activeTab === 'TV Shows') && (
           <>
             <div className="movies-header">
-              <h2>
-                {isSearchMode ? '🔍 Search Results' : `${activeTab === 'Movies' ? 'Movie' : 'TV Show'} Collection`}
-              </h2>
+              <div className="movies-header-title">
+                <h2>
+                  {isSearchMode
+                    ? '🔍 Search Results'
+                    : formatTitle(tierMeta?.tier || selectedTier, activeTab)}
+                </h2>
+                {!isSearchMode && <TierBadge meta={tierMeta} />}
+              </div>
               <div className="header-info">
                 {isSearchMode && searchInfo && (
                   <div className="search-status">
@@ -276,49 +270,6 @@ function App() {
             </div>
 
             <TorrentHealthOverview />
-
-            {/* Latest section (backed by media_radar_cache:hot) — Movies tab only */}
-            {activeTab === 'Movies' && !isSearchMode && (
-              <>
-                {topReleases.length > 0 && (
-                  <div className="special-section">
-                    <div className="section-title-row">
-                      <h3 className="section-title">🔥 Top Releases This Week</h3>
-                      <TierBadge meta={latestTierMeta} context="latest" />
-                    </div>
-                    <MovieGrid movies={topReleases} />
-                  </div>
-                )}
-
-                {recentlyAdded.length > 0 && (
-                  <div className="special-section">
-                    <div className="section-title-row">
-                      <h3 className="section-title">🆕 Recently Added</h3>
-                      <TierBadge meta={latestTierMeta} context="latest" />
-                    </div>
-                    <MovieGrid movies={recentlyAdded} />
-                  </div>
-                )}
-
-                {(topReleases.length > 0 || recentlyAdded.length > 0) && (
-                  <div className="section-divider">
-                    <div className="section-title-row">
-                      <h3 className="section-title">🎬 All Movies</h3>
-                      <TierBadge meta={allTierMeta} context="all" />
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {activeTab === 'TV Shows' && !isSearchMode && allTierMeta?.tier && (
-              <div className="section-divider">
-                <div className="section-title-row">
-                  <h3 className="section-title">📺 All TV Shows</h3>
-                  <TierBadge meta={allTierMeta} context="all" />
-                </div>
-              </div>
-            )}
 
             <MovieGrid movies={items} />
             {renderPagination()}
