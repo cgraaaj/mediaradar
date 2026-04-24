@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './Header.css';
 import { toast } from 'react-toastify';
 
-const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setSelectedLanguage, selectedSource, setSelectedSource }) => {
+const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setSelectedLanguage, selectedSource, setSelectedSource, selectedTier, setSelectedTier }) => {
   const [activeGenre, setActiveGenre] = useState('All');
   const [sortBy, setSortBy] = useState('Popularity');
 
@@ -114,6 +114,22 @@ const Header = ({ activeTab, setActiveTab, onSearchClick, selectedLanguage, setS
         </nav>
         
         <div className="controls">
+          {(activeTab === 'Movies' || activeTab === 'TV Shows') && setSelectedTier && (
+            <div className="tier-control">
+              <span className="control-label">Catalog</span>
+              <select
+                value={selectedTier || 'cold'}
+                onChange={(e) => setSelectedTier(e.target.value)}
+                className="control-select"
+                title="Which Redis cache tier to browse. Cold = full 7-day catalog, Hot = fresh 3-hour pool, Warm = union of both."
+              >
+                <option value="cold">🧊 Full Catalog (cold)</option>
+                <option value="hot">⚡ Latest Only (hot)</option>
+                <option value="warm">🌡️ Union (warm)</option>
+              </select>
+            </div>
+          )}
+
           {(activeTab === 'Movies' || activeTab === 'TV Shows') && setSelectedSource && (
             <div className="source-control">
               <span className="control-label">Source</span>
