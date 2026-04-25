@@ -209,30 +209,36 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         },
       };
 
-      const response = await fetch('https://n8n.cgraaaj.in/webhook/submit-torrent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
+      // Proxy through our own backend to avoid browser CORS against n8n
+      // and to keep the n8n URL out of the client bundle.
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const response = await axios.post(
+        `${apiBaseUrl}/webhooks/request-movie`,
+        payload,
+        { timeout: 15000 }
+      );
 
-      if (response.ok) {
-        console.log('Successfully sent to webhook');
+      if (response.data?.success) {
+        console.log('Successfully sent to webhook', response.data);
         toast.success(`🚀 Movie "${movie.title}" requested successfully!`, {
           autoClose: 4000,
         });
       } else {
-        console.error('Webhook request failed:', response.status);
-        toast.error(`❌ Failed to request movie. Server responded with status: ${response.status}`, {
+        console.error('Webhook request failed:', response.status, response.data);
+        toast.error(`❌ Failed to request movie (status ${response.status}).`, {
           autoClose: 5000,
         });
       }
     } catch (error) {
-      console.error('Webhook error:', error);
-      toast.error('❌ Network error: Unable to send movie request', {
-        autoClose: 5000,
-      });
+      const status = error.response?.status;
+      const upstreamMsg = error.response?.data?.error;
+      console.error('Webhook error:', { status, upstreamMsg, error });
+      toast.error(
+        upstreamMsg
+          ? `❌ ${upstreamMsg}${status ? ` (HTTP ${status})` : ''}`
+          : '❌ Network error: Unable to send movie request',
+        { autoClose: 5000 }
+      );
     }
   };
 
@@ -279,96 +285,104 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
           </button>
         </div>
         
-        {/* Movie Details Section */}
-        <div className="modal-movie-details">
+        {/* Compact Summary Band — small thumb + chips + collapse toggle */}
+        <div className="modal-summary-band">
           {movie.poster && (
-            <div className="modal-backdrop-image">
-              <img src={movie.poster} alt={`${movie.title} backdrop`} />
+            <div className="modal-summary-thumb">
+              <img src={movie.poster} alt={movie.title} />
             </div>
           )}
-          
-          <div className="modal-details">
-            <h4 
-              className="collapsible-header"
-              onClick={() => setShowDetails(!showDetails)}
-            >
-              <span>📝 Show Details</span>
-              <span className={`arrow ${showDetails ? 'expanded' : ''}`}>▼</span>
-            </h4>
-            {showDetails && (
-              <div className="modal-details-content">
-                <div className="modal-info-grid">
-                  <div className="modal-basic-info">
-                    {movie.tagline && (
-                      <p className="modal-tagline">"{movie.tagline}"</p>
-                    )}
-                    
-                    <div className="modal-meta-row">
-                      {movie.genre && <span className="modal-genre">🎭 {movie.genre}</span>}
-                      {movie.runtime && <span className="modal-runtime">⏱️ {movie.runtime}</span>}
-                      {movie.language && movie.language !== 'N/A' && (
-                        <span className="modal-lang">🗣️ {movie.language.split(',')[0]}</span>
-                      )}
-                    </div>
 
-                    {movie.director && (
-                      <p className="modal-director">
-                        <strong>Director:</strong> {movie.director}
-                      </p>
-                    )}
+          <div className="modal-summary-meta">
+            <div className="modal-summary-chips">
+              {movie.genre && (
+                <span className="modal-chip chip-genre" title={movie.genre}>
+                  🎭 {movie.genre.split(',')[0]}
+                </span>
+              )}
+              {movie.runtime && (
+                <span className="modal-chip chip-runtime">⏱️ {movie.runtime}</span>
+              )}
+              {movie.language && movie.language !== 'N/A' && (
+                <span className="modal-chip chip-lang" title={movie.language}>
+                  🗣️ {movie.language.split(',')[0]}
+                </span>
+              )}
+              {movie.imdbRating && movie.imdbRating !== 'N/A' && (
+                <span className="modal-chip chip-rating">⭐ {movie.imdbRating}</span>
+              )}
+              {movie.tmdbRating && (
+                <span className="modal-chip chip-rating">🌟 {movie.tmdbRating}</span>
+              )}
+            </div>
+            {movie.tagline && (
+              <p className="modal-summary-tagline" title={movie.tagline}>"{movie.tagline}"</p>
+            )}
+          </div>
 
-                    {movie.downloadLanguages && movie.downloadLanguages.available.length > 0 && (
-                      <p className="modal-download-languages">
-                        <strong>Audio Languages:</strong> {movie.downloadLanguages.available.join(', ')}
-                      </p>
-                    )}
-                  </div>
+          <button
+            className="modal-details-toggle"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowDetails(!showDetails);
+            }}
+            aria-expanded={showDetails}
+            title={showDetails ? 'Hide details' : 'Show details'}
+          >
+            <span>{showDetails ? 'Hide' : 'Details'}</span>
+            <span className={`arrow ${showDetails ? 'expanded' : ''}`}>▼</span>
+          </button>
+        </div>
 
-                  <div className="modal-metadata">
-                    {movie.country && movie.country !== 'N/A' && (
-                      <div className="modal-metadata-item">
-                        <strong>Country:</strong> {movie.country}
-                      </div>
-                    )}
-                    {movie.releaseDate && (
-                      <div className="modal-metadata-item">
-                        <strong>Release:</strong> {new Date(movie.releaseDate).toLocaleDateString()}
-                      </div>
-                    )}
-                    {movie.imdbRating && movie.imdbRating !== 'N/A' && (
-                      <div className="modal-metadata-item">
-                        <strong>IMDb:</strong> ⭐ {movie.imdbRating}
-                      </div>
-                    )}
-                    {movie.tmdbRating && (
-                      <div className="modal-metadata-item">
-                        <strong>TMDB:</strong> 🌟 {movie.tmdbRating}
-                      </div>
-                    )}
-                  </div>
-                </div>
+        {/* Expanded details — only mounted when toggled, scroll capped */}
+        {showDetails && (
+          <div className="modal-details-expanded">
+            <div className="modal-info-grid">
+              <div className="modal-basic-info">
+                {movie.director && (
+                  <p className="modal-director">
+                    <strong>Director:</strong> {movie.director}
+                  </p>
+                )}
+                {movie.downloadLanguages && movie.downloadLanguages.available.length > 0 && (
+                  <p className="modal-download-languages">
+                    <strong>Audio Languages:</strong> {movie.downloadLanguages.available.join(', ')}
+                  </p>
+                )}
+              </div>
 
-                {movie.plot && (
-                  <div className="modal-plot">
-                    <h5>Plot:</h5>
-                    <p>{movie.plot}</p>
+              <div className="modal-metadata">
+                {movie.country && movie.country !== 'N/A' && (
+                  <div className="modal-metadata-item">
+                    <strong>Country:</strong> {movie.country}
                   </div>
                 )}
-                {movie.actors && (
-                  <div className="modal-cast">
-                    <h5>Cast:</h5>
-                    <p>{movie.actors}</p>
+                {movie.releaseDate && (
+                  <div className="modal-metadata-item">
+                    <strong>Release:</strong> {new Date(movie.releaseDate).toLocaleDateString()}
                   </div>
                 )}
               </div>
+            </div>
+
+            {movie.plot && (
+              <div className="modal-plot">
+                <h5>Plot:</h5>
+                <p>{movie.plot}</p>
+              </div>
+            )}
+            {movie.actors && (
+              <div className="modal-cast">
+                <h5>Cast:</h5>
+                <p>{movie.actors}</p>
+              </div>
             )}
           </div>
-        </div>
-        
+        )}
+
         {/* Download Section with Tabs */}
         <div className="modal-downloads-section">
-          <h3 className="modal-downloads-title">Download Options</h3>
-          
           {availableQualities.length > 0 ? (
             <>
               {/* Quality Tabs */}
@@ -393,13 +407,6 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
               <div className="modal-tab-content">
                 {activeTab && (
                   <div className="modal-active-tab-content">
-                    <div className="modal-tab-header">
-                      <h4 className="modal-tab-quality">{activeTab.toUpperCase()}</h4>
-                      <span className="modal-tab-file-count">
-                        {availableQualities.find(([quality]) => quality === activeTab)?.[1]?.length || 0} files available
-                      </span>
-                    </div>
-                    
                     <div className="modal-files-grid">
                       {(() => {
                         const filteredQualities = availableQualities.filter(([quality]) => quality === activeTab);
