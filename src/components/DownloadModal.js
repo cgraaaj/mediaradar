@@ -30,6 +30,11 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
   const [showDetails, setShowDetails] = useState(false);
   const [torrentStats, setTorrentStats] = useState({});
   const [loadingStats, setLoadingStats] = useState(false);
+  // Per-row resolution state, keyed by intermediateUrl. Lets multiple rows
+  // resolve in parallel without a single shared spinner.
+  // Shape: { [intermediateUrl]: { status: 'pending'|'resolved'|'failed',
+  //                                 finalUrl?, finalUrlHost?, error? } }
+  const [resolveState, setResolveState] = useState({});
 
 
 
@@ -146,6 +151,100 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
     }
   }, [isOpen, availableQualities, activeTab]); // Proper dependency array
 
+  // Resolve an ad-gated / cpm-gated redirector URL to its final downloadable
+  // URL via the backend (which proxies to cold-radar /resolve), then open the
+  // final URL. On failure, falls back to opening the redirector URL with a
+  // warning so the user still has a path forward (manual ad-walk).
+  // NB: declared BEFORE the early-return below so hooks order stays stable
+  // across renders (react-hooks/rules-of-hooks).
+  const handleResolveAndOpen = useCallback(async (e, file) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const intermediate = file.intermediateUrl || file.originalUrl;
+    if (!intermediate) {
+      toast.error('❌ No redirector URL available for this row.');
+      return;
+    }
+
+    // Optimistic: if a previous click already resolved this row, just reopen
+    // the cached final URL.
+    const prior = resolveState[intermediate];
+    if (prior && prior.status === 'resolved' && prior.finalUrl) {
+      window.open(prior.finalUrl, '_blank');
+      toast.success(`🎬 Opening "${file.filename}"`);
+      return;
+    }
+
+    setResolveState((s) => ({ ...s, [intermediate]: { status: 'pending' } }));
+    const toastId = toast.loading('🔗 Resolving final download URL...');
+
+    try {
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const { data } = await axios.post(
+        `${apiBaseUrl}/links/resolve`,
+        { intermediateUrl: intermediate },
+        { timeout: 20000 }
+      );
+
+      if (data?.status === 'resolved' && data?.finalUrl) {
+        setResolveState((s) => ({
+          ...s,
+          [intermediate]: {
+            status: 'resolved',
+            finalUrl: data.finalUrl,
+            finalUrlHost: data.finalUrlHost || null,
+            cached: !!data.cached,
+            source: data.source || null,
+          },
+        }));
+        window.open(data.finalUrl, '_blank');
+        toast.update(toastId, {
+          render: data.cached
+            ? `🎬 Opening "${file.filename}" (cached resolution)`
+            : `🎬 Opening "${file.filename}"`,
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000,
+        });
+        if (onDownload) onDownload(file.filename);
+        return;
+      }
+
+      const reason = data?.error || data?.status || 'unknown';
+      setResolveState((s) => ({
+        ...s,
+        [intermediate]: { status: 'failed', error: reason },
+      }));
+      window.open(intermediate, '_blank');
+      toast.update(toastId, {
+        render: `⚠️ Could not auto-resolve (${reason}); opening ad page.`,
+        type: 'warning',
+        isLoading: false,
+        autoClose: 4500,
+      });
+    } catch (err) {
+      const status = err.response?.status;
+      const upstream = err.response?.data;
+      console.error('Resolve error:', { status, upstream, message: err.message });
+      setResolveState((s) => ({
+        ...s,
+        [intermediate]: {
+          status: 'failed',
+          error: upstream?.error || err.message,
+        },
+      }));
+      window.open(intermediate, '_blank');
+      const detail = upstream?.detail || upstream?.error || err.message;
+      const msg = status === 503
+        ? '⚠️ Resolver service not configured; opening ad page.'
+        : status === 429
+        ? '⚠️ Resolve rate-limited; opening ad page.'
+        : `⚠️ Resolve failed (${detail}); opening ad page.`;
+      toast.update(toastId, { render: msg, type: 'warning', isLoading: false, autoClose: 4500 });
+    }
+  }, [resolveState, onDownload]);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -176,6 +275,9 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       toast.error('❌ Failed to open download link');
     }
   };
+
+  // (handleResolveAndOpen lives above the early `return null` so hooks order
+  // is invariant across renders; see the useCallback declaration earlier.)
 
   const handleWebhookClick = async (e, file) => {
     e.preventDefault();
@@ -420,10 +522,19 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                             const isDirect = file.kind === 'direct';
                             const isTorrent = file.kind === 'torrent';
                             const isMagnet = file.kind === 'magnet' && !isTorrent;
-                            const cpmGated = isDirect && file.status === 'cpm_gated';
+                            // `ad_gated` is the same UX as `cpm_gated` from the
+                            // user's POV - both mean "the catalog has the
+                            // redirector but no fresh final URL". Treat them
+                            // equivalently so the resolve flow kicks in for
+                            // both.
+                            const cpmGated = isDirect && (file.status === 'cpm_gated' || file.status === 'ad_gated');
                             const stream = isDirect && file.status === 'stream';
                             const resolved = isDirect && file.status === 'resolved';
                             const sourceLabel = file.sourceLabel || (file.source === '1tamilmv' ? '1TamilMV' : file.source === 'hdhub4u' ? 'HDHub4u' : file.source);
+                            const intermediateUrlForFile = file.intermediateUrl || file.originalUrl;
+                            const rowResolve = intermediateUrlForFile ? resolveState[intermediateUrlForFile] : null;
+                            const isResolving = rowResolve?.status === 'pending';
+                            const isResolvedNow = rowResolve?.status === 'resolved' && !!rowResolve.finalUrl;
 
                             return (
                               <div key={`${quality}-${index}`} className={`modal-download-item file-source-${file.source || 'unknown'} file-kind-${file.kind || 'unknown'}`}>
@@ -440,9 +551,14 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                           {file.kind.toUpperCase()}
                                         </span>
                                       )}
-                                      {cpmGated && (
-                                        <span className="modal-status-chip status-cpm" title="This link is ad-gated. You'll see an ad page before the download.">
+                                      {cpmGated && !isResolvedNow && (
+                                        <span className="modal-status-chip status-cpm" title="This link is ad-gated. Click 'Open' to auto-resolve to the final URL.">
                                           ⚠️ AD-GATED
+                                        </span>
+                                      )}
+                                      {isResolvedNow && (
+                                        <span className="modal-status-chip status-resolved" title={`Auto-resolved to ${rowResolve.finalUrlHost || 'final host'}`}>
+                                          ✅ RESOLVED
                                         </span>
                                       )}
                                       {stream && (
@@ -555,14 +671,46 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
 
                                 <div className="modal-download-buttons">
                                   <div className="modal-download-grid">
-                                    {/* Primary action depends on kind */}
+                                    {/* Primary action depends on kind. For
+                                        ad-gated rows we route through the
+                                        backend's /api/links/resolve so the
+                                        user gets the final URL directly
+                                        instead of having to walk an ad page.
+                                    */}
                                     {isDirect && (
                                       <button
-                                        className={`modal-download-file-btn ${cpmGated ? 'gated' : ''}`}
-                                        onClick={(e) => handleDownloadClick(e, file.href, file.filename)}
-                                        title={cpmGated ? 'Ad-gated: a ad-page will open first' : stream ? 'Stream in browser' : 'Open direct download'}
+                                        className={`modal-download-file-btn ${cpmGated && !isResolvedNow ? 'gated' : ''}`}
+                                        disabled={isResolving}
+                                        onClick={(e) => {
+                                          if (isResolvedNow) {
+                                            return handleDownloadClick(e, rowResolve.finalUrl, file.filename);
+                                          }
+                                          if (cpmGated) {
+                                            return handleResolveAndOpen(e, file);
+                                          }
+                                          return handleDownloadClick(e, file.href, file.filename);
+                                        }}
+                                        title={
+                                          isResolving
+                                            ? 'Resolving final URL…'
+                                            : isResolvedNow
+                                            ? `Open final URL${rowResolve.finalUrlHost ? ' on ' + rowResolve.finalUrlHost : ''}`
+                                            : cpmGated
+                                            ? 'Ad-gated: backend will auto-resolve to the final URL'
+                                            : stream
+                                            ? 'Stream in browser'
+                                            : 'Open direct download'
+                                        }
                                       >
-                                        {cpmGated ? '⚠️ Open (Ad)' : stream ? '▶️ Stream' : '⬇️ Download'}
+                                        {isResolving
+                                          ? '⏳ Resolving…'
+                                          : isResolvedNow
+                                          ? '⬇️ Download'
+                                          : cpmGated
+                                          ? '🔗 Resolve & Open'
+                                          : stream
+                                          ? '▶️ Stream'
+                                          : '⬇️ Download'}
                                       </button>
                                     )}
 
