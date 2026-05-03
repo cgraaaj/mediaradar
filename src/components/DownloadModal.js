@@ -187,7 +187,12 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         { timeout: 20000 }
       );
 
-      if (data?.status === 'resolved' && data?.finalUrl) {
+      // cold-radar's /resolve returns status='cached' when it answers from
+      // its PG-backed cache (within maxAgeSeconds) and status='resolved'
+      // when it walks the redirect chain fresh — both are success cases.
+      // Treating only 'resolved' as success used to drop us into the
+      // ad-page fallback on every cached response.
+      if ((data?.status === 'resolved' || data?.status === 'cached') && data?.finalUrl) {
         setResolveState((s) => ({
           ...s,
           [intermediate]: {
@@ -682,12 +687,23 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                         className={`modal-download-file-btn ${cpmGated && !isResolvedNow ? 'gated' : ''}`}
                                         disabled={isResolving}
                                         onClick={(e) => {
+                                          // 1) Already resolved this session? Reuse the in-memory result.
                                           if (isResolvedNow) {
                                             return handleDownloadClick(e, rowResolve.finalUrl, file.filename);
                                           }
-                                          if (cpmGated) {
+                                          // 2) Have a stable intermediate? JIT-resolve through the
+                                          //    backend so the user always gets a fresh signed URL.
+                                          //    Required even for status='resolved' rows because the
+                                          //    cached final_url in PG can be hours old and the
+                                          //    upstream CDN tokens (hubcloud / fsl-buckets / etc.)
+                                          //    expire well within that window. The backend +
+                                          //    cold-radar share an LRU + PG cache so repeat clicks
+                                          //    hit warm paths in <100 ms.
+                                          if (intermediateUrlForFile) {
                                             return handleResolveAndOpen(e, file);
                                           }
+                                          // 3) Legacy / non-resolvable rows: fall back to whatever
+                                          //    final URL we have. Best-effort; may 404 if stale.
                                           return handleDownloadClick(e, file.href, file.filename);
                                         }}
                                         title={
@@ -695,8 +711,10 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                             ? 'Resolving final URL…'
                                             : isResolvedNow
                                             ? `Open final URL${rowResolve.finalUrlHost ? ' on ' + rowResolve.finalUrlHost : ''}`
-                                            : cpmGated
-                                            ? 'Ad-gated: backend will auto-resolve to the final URL'
+                                            : intermediateUrlForFile
+                                            ? cpmGated
+                                              ? 'Ad-gated: backend will auto-resolve to the final URL'
+                                              : 'Backend will mint a fresh signed URL on click (avoids stale-token 404s)'
                                             : stream
                                             ? 'Stream in browser'
                                             : 'Open direct download'
