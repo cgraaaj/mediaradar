@@ -55,7 +55,11 @@ function App() {
 
   // Filter state.
   const [selectedLanguage, setSelectedLanguage] = useState('all');
-  const [selectedSource, setSelectedSource] = useState('all');
+  // Default source = 1tamilmv to match backend default and land users on
+  // the "latest catalog" view they expect. Users can switch to 'all' or
+  // any other source via the Header dropdown — only the *initial* render
+  // is biased.
+  const [selectedSource, setSelectedSource] = useState('1tamilmv');
   // 'cold' = full 7-day catalog (default), 'hot' = fresh pool only,
   // 'warm' = app-side union of hot ∪ cold (HSM middle band).
   const [selectedTier, setSelectedTier] = useState('cold');
