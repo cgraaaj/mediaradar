@@ -176,6 +176,44 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       return;
     }
 
+    // CRITICAL — Chrome popup-blocker workaround.
+    //
+    // Chrome (and most browsers) only allow window.open() to spawn a
+    // tab when the call is SYNCHRONOUS inside a user-gesture handler.
+    // Calling window.open() AFTER `await axios.post(...)` is async and
+    // gets silently blocked — the user clicks "RESOLVE & OPEN", the
+    // resolve succeeds, but no tab opens. We then fall through to the
+    // fallback `window.open(intermediate)` which ALSO gets blocked, OR
+    // (worse) the user thinks the click did nothing and clicks again
+    // and lands on the ad page through some other route.
+    //
+    // The fix: open `about:blank` synchronously NOW (allowed because
+    // we're inside the click handler), keep the popup ref, then mutate
+    // its location once we have the resolved URL. If the resolve fails
+    // we close the popup so we don't leave stray about:blank tabs.
+    //
+    // Note: pre-opening the popup also gives the user immediate visual
+    // feedback that the click registered.
+    const popupRef = window.open('about:blank', '_blank');
+    if (!popupRef) {
+      // Some users have window.open universally blocked (uBlock Origin
+      // strict mode, mobile Safari, etc.). Surface a clear message; the
+      // resolve still happens and the result is cached so the next
+      // click can use the synchronous prior-result branch above.
+      toast.warn('⚠️ Browser blocked popup. Allow popups for this site, then click again.');
+    }
+    const navigatePopup = (url) => {
+      try {
+        if (popupRef && !popupRef.closed) popupRef.location.href = url;
+        else window.open(url, '_blank');
+      } catch {
+        window.open(url, '_blank');
+      }
+    };
+    const closePopup = () => {
+      try { if (popupRef && !popupRef.closed) popupRef.close(); } catch { /* ignore */ }
+    };
+
     setResolveState((s) => ({ ...s, [intermediate]: { status: 'pending' } }));
     const toastId = toast.loading('🔗 Resolving final download URL...');
 
@@ -203,7 +241,7 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
             source: data.source || null,
           },
         }));
-        window.open(data.finalUrl, '_blank');
+        navigatePopup(data.finalUrl);
         toast.update(toastId, {
           render: data.cached
             ? `🎬 Opening "${file.filename}" (cached resolution)`
@@ -221,7 +259,7 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         ...s,
         [intermediate]: { status: 'failed', error: reason },
       }));
-      window.open(intermediate, '_blank');
+      navigatePopup(intermediate);
       toast.update(toastId, {
         render: `⚠️ Could not auto-resolve (${reason}); opening ad page.`,
         type: 'warning',
@@ -239,13 +277,24 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
           error: upstream?.error || err.message,
         },
       }));
-      window.open(intermediate, '_blank');
+      // Close the pre-opened about:blank rather than navigating it to
+      // the ad page — for 4xx errors the ad page won't help the user
+      // anyway, and for 5xx errors we want them to retry not abandon.
+      // Exception: 4xx host_not_allowed is the only case where falling
+      // back to the ad page is genuinely useful as a manual escape hatch.
+      if (status === 400 && upstream?.error === 'host_not_allowed') {
+        navigatePopup(intermediate);
+      } else {
+        closePopup();
+      }
       const detail = upstream?.detail || upstream?.error || err.message;
       const msg = status === 503
-        ? '⚠️ Resolver service not configured; opening ad page.'
+        ? '⚠️ Resolver service not configured.'
         : status === 429
-        ? '⚠️ Resolve rate-limited; opening ad page.'
-        : `⚠️ Resolve failed (${detail}); opening ad page.`;
+        ? '⚠️ Resolve rate-limited; try again in a moment.'
+        : status === 400 && upstream?.error === 'host_not_allowed'
+        ? `⚠️ Host not in allow-list (${detail}); opening ad page.`
+        : `⚠️ Resolve failed (${detail}); please try again.`;
       toast.update(toastId, { render: msg, type: 'warning', isLoading: false, autoClose: 4500 });
     }
   }, [resolveState, onDownload]);
