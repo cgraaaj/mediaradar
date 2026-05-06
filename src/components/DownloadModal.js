@@ -225,6 +225,38 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         { timeout: 20000 }
       );
 
+      // Upstream-dead handling: the resolver detected an unrecoverable
+      // deletion sentinel (e.g. hubdrive's "File not found"). The
+      // intermediate URL is a confirmed dead-end — opening it would just
+      // land the user on the same error page they already complained
+      // about. Close the pre-opened popup, surface a clear message,
+      // and mark this row 'expired' so subsequent clicks (and the row's
+      // RESOLVE button) reflect the dead state instead of churning.
+      //
+      // Behind the scenes cold-radar is already (a) marking the row
+      // expired in PG so the next /feed materialize hides it, and
+      // (b) firing a background recrawl of the parent post URL to
+      // discover live mirrors. So the catalog self-heals without any
+      // further user action — they just need to come back later or try
+      // a different quality NOW.
+      if (data?.status === 'expired') {
+        setResolveState((s) => ({
+          ...s,
+          [intermediate]: {
+            status: 'expired',
+            error: data.error || 'upstream_file_deleted',
+          },
+        }));
+        closePopup();
+        toast.update(toastId, {
+          render: '🚫 This file is no longer available upstream. Try a different quality, or use "Request Movie".',
+          type: 'error',
+          isLoading: false,
+          autoClose: 6000,
+        });
+        return;
+      }
+
       // cold-radar's /resolve returns status='cached' when it answers from
       // its PG-backed cache (within maxAgeSeconds) and status='resolved'
       // when it walks the redirect chain fresh — both are success cases.
@@ -589,6 +621,10 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                             const rowResolve = intermediateUrlForFile ? resolveState[intermediateUrlForFile] : null;
                             const isResolving = rowResolve?.status === 'pending';
                             const isResolvedNow = rowResolve?.status === 'resolved' && !!rowResolve.finalUrl;
+                            // Cold-radar told us this row is upstream-dead (e.g. hubdrive
+                            // serves a "File not found" page for the file id). We surface
+                            // it visually so the user doesn't keep clicking the dead link.
+                            const isExpired = rowResolve?.status === 'expired';
 
                             return (
                               <div key={`${quality}-${index}`} className={`modal-download-item file-source-${file.source || 'unknown'} file-kind-${file.kind || 'unknown'}`}>
@@ -605,7 +641,12 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                           {file.kind.toUpperCase()}
                                         </span>
                                       )}
-                                      {cpmGated && !isResolvedNow && (
+                                      {isExpired && (
+                                        <span className="modal-status-chip status-expired" title="The file is no longer available upstream. Try a different quality or use Request Movie.">
+                                          🚫 EXPIRED
+                                        </span>
+                                      )}
+                                      {cpmGated && !isResolvedNow && !isExpired && (
                                         <span className="modal-status-chip status-cpm" title="This link is ad-gated. Click 'Open' to auto-resolve to the final URL.">
                                           ⚠️ AD-GATED
                                         </span>
@@ -733,9 +774,21 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                     */}
                                     {isDirect && (
                                       <button
-                                        className={`modal-download-file-btn ${cpmGated && !isResolvedNow ? 'gated' : ''}`}
-                                        disabled={isResolving}
+                                        className={`modal-download-file-btn ${cpmGated && !isResolvedNow ? 'gated' : ''} ${isExpired ? 'expired' : ''}`}
+                                        disabled={isResolving || isExpired}
                                         onClick={(e) => {
+                                          // 0) Already known dead — short-circuit so user gets
+                                          //    the same explanation we showed on first click
+                                          //    instead of re-walking the chain to the same
+                                          //    upstream-deletion sentinel. Cold-radar already
+                                          //    fired off a background recrawl after the first
+                                          //    click; user can refresh later for a fresh blob.
+                                          if (isExpired) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            toast.info('🚫 File no longer available upstream. Try a different quality or use Request Movie.');
+                                            return;
+                                          }
                                           // 1) Already resolved this session? Reuse the in-memory result.
                                           if (isResolvedNow) {
                                             return handleDownloadClick(e, rowResolve.finalUrl, file.filename);
@@ -756,7 +809,9 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                           return handleDownloadClick(e, file.href, file.filename);
                                         }}
                                         title={
-                                          isResolving
+                                          isExpired
+                                            ? 'This file is no longer available upstream'
+                                            : isResolving
                                             ? 'Resolving final URL…'
                                             : isResolvedNow
                                             ? `Open final URL${rowResolve.finalUrlHost ? ' on ' + rowResolve.finalUrlHost : ''}`
@@ -769,7 +824,9 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                             : 'Open direct download'
                                         }
                                       >
-                                        {isResolving
+                                        {isExpired
+                                          ? '🚫 Unavailable'
+                                          : isResolving
                                           ? '⏳ Resolving…'
                                           : isResolvedNow
                                           ? '⬇️ Download'
