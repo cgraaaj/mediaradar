@@ -331,6 +331,111 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
     }
   }, [resolveState, onDownload]);
 
+  /**
+   * Re-check upstream for an EXPIRED row.
+   *
+   * Calls POST /api/links/recheck which proxies to cold-radar's /recheck.
+   * Cold-radar looks up the parent post URL, recrawls it once, and returns
+   * { newLinks, movies, tvshows }. Outcomes:
+   *   - newLinks > 0: upstream re-uploaded — toast "✨ X new mirrors!" and
+   *     ask user to refresh the page so they see the new qualities. We
+   *     don't auto-refresh because they may be mid-comparison across tiles.
+   *   - newLinks === 0: post is still genuinely dead. Toast a friendly
+   *     "still no live mirrors" so the user knows we actually checked.
+   *   - error: surface a warning toast; the user can retry later.
+   *
+   * Throttled per-row by the local recheckState map: while a recheck is in
+   * flight or has completed for that row, the button shows the appropriate
+   * state instead of allowing repeated clicks.
+   */
+  const handleRecheck = useCallback(async (e, file) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const intermediate = file.intermediateUrl || file.originalUrl;
+    if (!intermediate) {
+      toast.warn('⚠️ This row has no intermediate URL to recheck.');
+      return;
+    }
+    setResolveState((s) => ({
+      ...s,
+      [intermediate]: {
+        ...(s[intermediate] || {}),
+        status: 'rechecking',
+      },
+    }));
+    const toastId = toast.loading(`🔄 Asking upstream if "${file.filename}" is back…`);
+    try {
+      const apiUrl = process.env.REACT_APP_API_URL || '';
+      const { data } = await axios.post(
+        `${apiUrl}/api/links/recheck`,
+        { intermediateUrl: intermediate },
+        { timeout: 25000 },
+      );
+      if (!data?.found) {
+        setResolveState((s) => ({
+          ...s,
+          [intermediate]: {
+            status: 'expired',
+            error: data?.error || 'post_dead',
+            recheckedAt: Date.now(),
+          },
+        }));
+        toast.update(toastId, {
+          render: data?.error === 'post_dead'
+            ? '😔 Still no live mirrors upstream. We will keep retrying daily.'
+            : `⚠️ Recheck inconclusive (${data?.error || 'unknown'}).`,
+          type: data?.error === 'post_dead' ? 'info' : 'warning',
+          isLoading: false,
+          autoClose: 4500,
+        });
+        return;
+      }
+      const newLinks = Number(data.newLinks || 0);
+      setResolveState((s) => ({
+        ...s,
+        [intermediate]: {
+          status: newLinks > 0 ? 'rechecked_fresh' : 'expired',
+          newLinks,
+          recheckedAt: Date.now(),
+        },
+      }));
+      if (newLinks > 0) {
+        toast.update(toastId, {
+          render: `✨ Upstream re-uploaded — ${newLinks} new mirror${newLinks > 1 ? 's' : ''} found! Refresh the page to see them.`,
+          type: 'success',
+          isLoading: false,
+          autoClose: 8000,
+        });
+      } else {
+        toast.update(toastId, {
+          render: '😔 Recrawled the post but no fresh mirrors yet. We will keep retrying daily.',
+          type: 'info',
+          isLoading: false,
+          autoClose: 5000,
+        });
+      }
+    } catch (err) {
+      const status = err.response?.status;
+      const upstream = err.response?.data;
+      console.error('Recheck error:', { status, upstream, message: err.message });
+      setResolveState((s) => ({
+        ...s,
+        [intermediate]: {
+          status: 'expired',
+          error: upstream?.error || err.message,
+        },
+      }));
+      toast.update(toastId, {
+        render: status === 429
+          ? '⚠️ Too many rechecks; try again in a minute.'
+          : `⚠️ Recheck failed (${upstream?.error || err.message}).`,
+        type: 'warning',
+        isLoading: false,
+        autoClose: 4500,
+      });
+    }
+  }, []);
+
   if (!isOpen) return null;
 
   const handleBackdropClick = (e) => {
@@ -625,6 +730,8 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                             // serves a "File not found" page for the file id). We surface
                             // it visually so the user doesn't keep clicking the dead link.
                             const isExpired = rowResolve?.status === 'expired';
+                            const isRechecking = rowResolve?.status === 'rechecking';
+                            const recheckedFresh = rowResolve?.status === 'rechecked_fresh';
 
                             return (
                               <div key={`${quality}-${index}`} className={`modal-download-item file-source-${file.source || 'unknown'} file-kind-${file.kind || 'unknown'}`}>
@@ -835,6 +942,36 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                           : stream
                                           ? '▶️ Stream'
                                           : '⬇️ Download'}
+                                      </button>
+                                    )}
+
+                                    {/* Recheck button: visible only on EXPIRED rows.
+                                        Asks cold-radar to re-fetch the parent post and
+                                        report new mirrors. Cheap (1 upstream HTTP per
+                                        click, rate-limited 30 RPM/IP) so the user can
+                                        try after they think upstream might have re-uploaded.
+                                        Disappears once a fresh recheck reported new links. */}
+                                    {isExpired && intermediateUrlForFile && !recheckedFresh && (
+                                      <button
+                                        className={`modal-download-file-btn recheck${isRechecking ? ' rechecking' : ''}`}
+                                        onClick={(e) => handleRecheck(e, file)}
+                                        disabled={isRechecking}
+                                        title={
+                                          isRechecking
+                                            ? 'Asking upstream if the file is back…'
+                                            : 'Re-crawl the parent post page; if upstream re-uploaded with new file IDs, we ingest them and you can refresh to see the new mirrors.'
+                                        }
+                                      >
+                                        {isRechecking ? '⏳ Rechecking…' : '🔄 Re-check upstream'}
+                                      </button>
+                                    )}
+                                    {recheckedFresh && (
+                                      <button
+                                        className="modal-download-file-btn refresh-page"
+                                        onClick={() => window.location.reload()}
+                                        title="New mirrors discovered — reload to see them"
+                                      >
+                                        ✨ {rowResolve?.newLinks || 0} new — Refresh page
                                       </button>
                                     )}
 

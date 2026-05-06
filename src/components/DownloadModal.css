@@ -1054,6 +1054,44 @@
   transform: none !important;
 }
 
+/* 🔄 Re-check upstream button — visible only when a row is EXPIRED.
+   Differentiated from the disabled "🚫 Unavailable" sibling by the
+   amber palette (action available) vs red palette (action denied). */
+.modal-download-file-btn.recheck {
+  background: rgba(255, 167, 38, 0.16) !important;
+  color: #ffa726 !important;
+  border: 1px solid rgba(255, 167, 38, 0.45);
+  cursor: pointer;
+  opacity: 1;
+}
+.modal-download-file-btn.recheck:hover:not(:disabled) {
+  background: rgba(255, 167, 38, 0.24) !important;
+  transform: translateY(-1px);
+}
+.modal-download-file-btn.recheck.rechecking {
+  cursor: progress;
+  opacity: 0.75;
+}
+
+/* ✨ Refresh-page button — replaces the recheck button after a successful
+   recheck that turned up new mirrors. Green to invite the click. */
+.modal-download-file-btn.refresh-page {
+  background: rgba(76, 175, 80, 0.18) !important;
+  color: #66bb6a !important;
+  border: 1px solid rgba(76, 175, 80, 0.5);
+  cursor: pointer;
+  font-weight: 600;
+  animation: refresh-pulse 2.4s ease-in-out infinite;
+}
+.modal-download-file-btn.refresh-page:hover {
+  background: rgba(76, 175, 80, 0.28) !important;
+  transform: translateY(-1px);
+}
+@keyframes refresh-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.5); }
+  50%      { box-shadow: 0 0 0 8px rgba(76, 175, 80, 0); }
+}
+
 /* Host / label chips in the metadata row */
 .modal-file-host,
 .modal-file-label {
