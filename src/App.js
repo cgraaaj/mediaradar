@@ -148,13 +148,11 @@ function App() {
   // -- Handlers --------------------------------------------------------------
 
   const handlePageChange = useCallback((newPage) => {
-    if (newPage < 1 || newPage > pagination.totalPages) return;
+    if (newPage < 1 || newPage > pagination.totalPages || newPage === page) return;
     setPage(newPage);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (pagination.currentPage !== newPage) {
-      toast.info(`📄 Loading ${activeTab.toLowerCase()} page ${newPage}...`, { autoClose: 2000, toastId: `page:${newPage}` });
-    }
-  }, [pagination.totalPages, pagination.currentPage, activeTab]);
+    toast.info(`📄 Loading ${activeTab.toLowerCase()} page ${newPage}…`, { autoClose: 2000, toastId: `page:${newPage}` });
+  }, [pagination.totalPages, page, activeTab]);
 
   const handleSearchClick = () => setIsSearchModalOpen(true);
   const handleSearchModalClose = () => setIsSearchModalOpen(false);
@@ -186,9 +184,20 @@ function App() {
   const renderPagination = () => {
     if (pagination.totalPages <= 1) return null;
 
+    // Drive the active page + range off the LOCAL `page` state, not the value
+    // echoed back in the (possibly stale) query data. With `keepPreviousData`,
+    // `pagination.currentPage` still reflects the OLD page while the next one
+    // is in flight — that's what made clicking "2" appear to do nothing for
+    // ~20s before snapping over. Using local state makes the UI respond
+    // instantly; `isBackgroundFetching` surfaces that the data is still loading.
+    const currentPage = page;
+    const { totalPages, totalItems, itemsPerPage } = pagination;
+    const hasPrevPage = currentPage > 1;
+    const hasNextPage = currentPage < totalPages;
+
     const maxVisiblePages = 5;
-    let startPage = Math.max(1, pagination.currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(pagination.totalPages, startPage + maxVisiblePages - 1);
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
     if (endPage - startPage + 1 < maxVisiblePages) {
       startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
@@ -198,17 +207,17 @@ function App() {
     return (
       <div className="pagination">
         <div className="pagination-info">
-          Showing {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, pagination.totalItems)} of {pagination.totalItems} {activeTab.toLowerCase()}
-          {isBackgroundFetching && <span className="pagination-refresh" title="Refreshing..."> · ↻</span>}
+          Showing {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} {activeTab.toLowerCase()}
+          {isBackgroundFetching && <span className="pagination-refresh" title="Loading…"> · loading page {currentPage}…</span>}
         </div>
         <div className="pagination-controls">
-          <button className="page-btn" onClick={() => handlePageChange(1)} disabled={!pagination.hasPrevPage}>First</button>
-          <button className="page-btn" onClick={() => handlePageChange(pagination.currentPage - 1)} disabled={!pagination.hasPrevPage}>Previous</button>
+          <button className="page-btn" onClick={() => handlePageChange(1)} disabled={!hasPrevPage || isBackgroundFetching}>First</button>
+          <button className="page-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={!hasPrevPage || isBackgroundFetching}>Previous</button>
           {pageNumbers.map(pn => (
-            <button key={pn} className={`page-btn ${pn === pagination.currentPage ? 'active' : ''}`} onClick={() => handlePageChange(pn)}>{pn}</button>
+            <button key={pn} className={`page-btn ${pn === currentPage ? 'active' : ''}`} onClick={() => handlePageChange(pn)} disabled={isBackgroundFetching}>{pn}</button>
           ))}
-          <button className="page-btn" onClick={() => handlePageChange(pagination.currentPage + 1)} disabled={!pagination.hasNextPage}>Next</button>
-          <button className="page-btn" onClick={() => handlePageChange(pagination.totalPages)} disabled={!pagination.hasNextPage}>Last</button>
+          <button className="page-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={!hasNextPage || isBackgroundFetching}>Next</button>
+          <button className="page-btn" onClick={() => handlePageChange(totalPages)} disabled={!hasNextPage || isBackgroundFetching}>Last</button>
         </div>
       </div>
     );
@@ -275,14 +284,48 @@ function App() {
 
             <TorrentHealthOverview />
 
-            <MovieGrid movies={items} />
+            {isBackgroundFetching && (
+              <div className="page-loading-bar" role="status" aria-live="polite">
+                <div className="page-loading-bar-fill" />
+                <span className="page-loading-bar-text">Loading page {page}…</span>
+              </div>
+            )}
+
+            <div className={isBackgroundFetching ? 'grid-stale' : ''}>
+              <MovieGrid movies={items} />
+            </div>
             {renderPagination()}
           </>
         )}
 
-        {!isInitialLoading && items.length === 0 && (activeTab === 'Movies' || activeTab === 'TV Shows') && (
+        {!isInitialLoading && !error && items.length === 0 && (activeTab === 'Movies' || activeTab === 'TV Shows') && (
           <div className="no-movies">
-            <p>No {activeTab.toLowerCase()} found. Please check your Redis connection.</p>
+            <p className="no-movies-title">
+              No {activeTab.toLowerCase()} match the current filters.
+            </p>
+            <p className="no-movies-sub">
+              Showing <strong>{(TIER_COPY[selectedTier] || TIER_COPY.cold).badge}</strong>
+              {selectedSource !== 'all' && <> · source <strong>{selectedSource}</strong></>}
+              {selectedLanguage !== 'all' && <> · language <strong>{selectedLanguage}</strong></>}.
+              {selectedTier === 'hot' && ' The Latest (hot) pool is small and may not contain this source yet.'}
+            </p>
+            <div className="no-movies-actions">
+              {selectedSource !== 'all' && (
+                <button className="page-btn" onClick={() => setSelectedSource('all')}>
+                  Show all sources
+                </button>
+              )}
+              {selectedTier !== 'cold' && (
+                <button className="page-btn" onClick={() => setSelectedTier('cold')}>
+                  Switch to Full Catalog
+                </button>
+              )}
+              {selectedLanguage !== 'all' && (
+                <button className="page-btn" onClick={() => setSelectedLanguage('all')}>
+                  Clear language filter
+                </button>
+              )}
+            </div>
           </div>
         )}
 

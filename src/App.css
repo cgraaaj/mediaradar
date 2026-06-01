@@ -148,6 +148,68 @@ body {
   font-size: 16px;
 }
 
+.no-movies-title {
+  color: #ddd;
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.no-movies-sub {
+  color: #888;
+  font-size: 14px;
+  max-width: 560px;
+  margin: 0 auto 18px;
+  line-height: 1.5;
+}
+
+.no-movies-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Page-transition loading indicator (shown while the next page is fetched
+   and the previous page is kept visible via keepPreviousData). */
+.page-loading-bar {
+  position: relative;
+  height: 3px;
+  margin: 0 0 16px;
+  background-color: #222;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.page-loading-bar-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, #4a9eff, transparent);
+  animation: page-loading-slide 1.1s ease-in-out infinite;
+}
+
+.page-loading-bar-text {
+  position: absolute;
+  right: 4px;
+  top: 6px;
+  font-size: 12px;
+  color: #4a9eff;
+}
+
+@keyframes page-loading-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+.grid-stale {
+  opacity: 0.55;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
 .pagination {
   margin: 40px 0;
   padding: 20px;
