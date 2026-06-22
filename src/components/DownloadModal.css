@@ -1132,6 +1132,31 @@
   transform: translateY(-1px);
 }
 
+/* Send-to-Discord (direct-link notify) button */
+.modal-notify-btn {
+  background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  grid-column: 1 / -1;
+  box-shadow: 0 3px 8px rgba(88, 101, 242, 0.3);
+}
+
+.modal-notify-btn:hover {
+  background: linear-gradient(135deg, #4752c4 0%, #3c45a5 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(88, 101, 242, 0.4);
+}
+
+.modal-notify-btn:active {
+  transform: translateY(0);
+}
+
 /* Left border accent per source on the whole row */
 .modal-download-item.file-source-1tamilmv {
   border-left: 3px solid rgba(255, 152, 0, 0.6);

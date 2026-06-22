@@ -535,6 +535,79 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
     }
   };
 
+  // Send an hdhub4u direct (ad-gated) file to the n8n direct-notify flow. n8n
+  // resolves the redirector to a fresh, short-lived download link and posts it
+  // to Discord/Telegram. We only forward a URL string — bytes never touch us.
+  const handleNotifyClick = async (e, file) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const intermediate = file.intermediateUrl || file.originalUrl;
+    if (!intermediate) {
+      toast.error('❌ No redirector URL to resolve for this row.');
+      return;
+    }
+
+    const toastId = toast.loading('📤 Resolving & sending download link…');
+    try {
+      const payload = {
+        title: movie.title,
+        requestedBy: 'media-radar-ui',
+        file: {
+          intermediateUrl: intermediate,
+          filename: file.filename,
+          size: file.size,
+          source: file.source,
+          host: file.host,
+          postUrl: file.postUrl,
+        },
+      };
+      const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
+      const { data } = await axios.post(
+        `${apiBaseUrl}/webhooks/notify-direct`,
+        payload,
+        { timeout: 25000 }
+      );
+
+      const upstream = data?.upstreamBody || {};
+      if (data?.success && upstream.success) {
+        toast.update(toastId, {
+          render: `📨 Direct link for "${file.filename}" sent to Discord.`,
+          type: 'success',
+          isLoading: false,
+          autoClose: 4000,
+        });
+      } else if (data?.success) {
+        // Delivered to n8n, but it could not resolve (expired / stream-only);
+        // n8n posts an "unavailable" notice to the channel.
+        toast.update(toastId, {
+          render: `⚠️ Sent, but link wasn't resolvable (${upstream.status || 'see Discord'}).`,
+          type: 'warning',
+          isLoading: false,
+          autoClose: 5000,
+        });
+      } else {
+        toast.update(toastId, {
+          render: '❌ Failed to send notification.',
+          type: 'error',
+          isLoading: false,
+          autoClose: 5000,
+        });
+      }
+    } catch (error) {
+      const status = error.response?.status;
+      const upstreamMsg = error.response?.data?.error;
+      toast.update(toastId, {
+        render: upstreamMsg
+          ? `❌ ${upstreamMsg}${status ? ` (HTTP ${status})` : ''}`
+          : '❌ Network error sending notification.',
+        type: 'error',
+        isLoading: false,
+        autoClose: 5000,
+      });
+    }
+  };
+
   const handleMagnetClick = (e, magnetLink, filename) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1003,6 +1076,19 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                         title="Open the source post page"
                                       >
                                         🔗 Post
+                                      </button>
+                                    )}
+
+                                    {/* Resolve the ad-gated link and push a fresh, short-lived
+                                        download URL to Discord/Telegram via n8n. Hidden on
+                                        expired rows (nothing to resolve). */}
+                                    {isDirect && intermediateUrlForFile && !isExpired && (
+                                      <button
+                                        className="modal-notify-btn"
+                                        onClick={(e) => handleNotifyClick(e, file)}
+                                        title="Resolve and send the download link to Discord/Telegram"
+                                      >
+                                        📤 Send to Discord
                                       </button>
                                     )}
                                   </div>
