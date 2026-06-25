@@ -241,14 +241,16 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const { data } = await axios.post(
         `${apiBaseUrl}/links/resolve`,
-        // forceFresh: the final hubcloud→google / workers.dev URLs are
-        // short-lived SIGNED URLs. A cold-radar PG-cached resolution from
-        // hours ago is very likely already expired and returns HTTP 400
-        // ("resolves 200 but the download 400s / nothing happens"). On an
-        // explicit user download click we always re-walk the chain to hand
-        // back a guaranteed-live URL. Repeat clicks within a short window are
-        // served from the in-session cache below (see FRESH_REUSE_MS).
-        { intermediateUrl: intermediate, forceFresh: true },
+        // maxAgeSeconds caps how stale a cold-radar resolution may be. We need
+        // a SHORT cap (not the multi-hour default) because the final
+        // hubcloud→google / workers.dev URLs are short-lived signed URLs — a
+        // resolution from hours ago is already expired and 400s. But we must
+        // NOT forceFresh on every click either: re-walking the chain hammers
+        // the CF-protected mirror hosts (hubcloud / hubdrive) and trips their
+        // Cloudflare bot-challenge, which httpx can't pass → the row degrades
+        // to cpm_gated. A few-minutes cache window is the balance: fresh enough
+        // that the signed URL is still valid, cached enough to avoid hammering.
+        { intermediateUrl: intermediate, maxAgeSeconds: 300 },
         { timeout: 20000 }
       );
 
