@@ -4,6 +4,44 @@ import { toast } from 'react-toastify';
 import axios from 'axios';
 import './DownloadModal.css';
 
+// Trigger a browser download for a (usually cross-origin) final URL.
+//
+// Why an anchor click instead of window.open():
+//   The resolved hubcloud→google URLs are served with
+//   `Content-Disposition: attachment`, so the browser downloads them rather
+//   than rendering. An <a>.click() to such a URL starts the download WITHOUT
+//   opening a tab, so it is never caught by the popup blocker and leaves no
+//   stray about:blank tab. window.open() called after an `await` is treated
+//   as a non-user-gesture popup and gets silently blocked — that was the
+//   "resolves 200 but nothing downloads" symptom.
+//
+// The `download` attribute is ignored for cross-origin responses (the server's
+// Content-Disposition filename wins), but we set it anyway so same-origin / no
+// -disposition URLs still get a sensible name. target=_blank is a safety net
+// for the rare case a URL is NOT an attachment (it then opens in a tab instead
+// of navigating the SPA away).
+const triggerBrowserDownload = (url, filename) => {
+  if (!url || url === '#') return false;
+  try {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    if (filename) a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return true;
+  } catch {
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+};
+
 // Extract info_hash from magnet link
 const extractInfoHash = (magnetLink) => {
   if (!magnetLink) return null;
@@ -167,51 +205,27 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       return;
     }
 
-    // Optimistic: if a previous click already resolved this row, just reopen
-    // the cached final URL.
+    // Optimistic: if a previous click already resolved this row, just
+    // re-trigger the download from the cached final URL.
     const prior = resolveState[intermediate];
     if (prior && prior.status === 'resolved' && prior.finalUrl) {
-      window.open(prior.finalUrl, '_blank');
-      toast.success(`🎬 Opening "${file.filename}"`);
+      triggerBrowserDownload(prior.finalUrl, file.filename);
+      toast.success(`⬇️ Downloading "${file.filename}"`);
       return;
     }
 
-    // CRITICAL — Chrome popup-blocker workaround.
+    // The final hubcloud→google URLs are `Content-Disposition: attachment`,
+    // so we start the download via an anchor click (see triggerBrowserDownload)
+    // rather than window.open(). That avoids the popup-blocker entirely — the
+    // old approach pre-opened an about:blank tab synchronously and navigated it
+    // after the await, which browsers block as a non-gesture popup (the
+    // "resolves 200 but nothing downloads" / stray blank-tab symptom).
     //
-    // Chrome (and most browsers) only allow window.open() to spawn a
-    // tab when the call is SYNCHRONOUS inside a user-gesture handler.
-    // Calling window.open() AFTER `await axios.post(...)` is async and
-    // gets silently blocked — the user clicks "RESOLVE & OPEN", the
-    // resolve succeeds, but no tab opens. We then fall through to the
-    // fallback `window.open(intermediate)` which ALSO gets blocked, OR
-    // (worse) the user thinks the click did nothing and clicks again
-    // and lands on the ad page through some other route.
-    //
-    // The fix: open `about:blank` synchronously NOW (allowed because
-    // we're inside the click handler), keep the popup ref, then mutate
-    // its location once we have the resolved URL. If the resolve fails
-    // we close the popup so we don't leave stray about:blank tabs.
-    //
-    // Note: pre-opening the popup also gives the user immediate visual
-    // feedback that the click registered.
-    const popupRef = window.open('about:blank', '_blank');
-    if (!popupRef) {
-      // Some users have window.open universally blocked (uBlock Origin
-      // strict mode, mobile Safari, etc.). Surface a clear message; the
-      // resolve still happens and the result is cached so the next
-      // click can use the synchronous prior-result branch above.
-      toast.warn('⚠️ Browser blocked popup. Allow popups for this site, then click again.');
-    }
-    const navigatePopup = (url) => {
-      try {
-        if (popupRef && !popupRef.closed) popupRef.location.href = url;
-        else window.open(url, '_blank');
-      } catch {
-        window.open(url, '_blank');
-      }
-    };
-    const closePopup = () => {
-      try { if (popupRef && !popupRef.closed) popupRef.close(); } catch { /* ignore */ }
+    // For the rare degraded path (resolve failed → open the ad page), we still
+    // need a real tab navigation; that's best-effort window.open and the toast
+    // tells the user what happened.
+    const openAdPage = (url) => {
+      try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* ignore */ }
     };
 
     setResolveState((s) => ({ ...s, [intermediate]: { status: 'pending' } }));
@@ -247,7 +261,6 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
             error: data.error || 'upstream_file_deleted',
           },
         }));
-        closePopup();
         toast.update(toastId, {
           render: '🚫 This file is no longer available upstream. Try a different quality, or use "Request Movie".',
           type: 'error',
@@ -273,11 +286,11 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
             source: data.source || null,
           },
         }));
-        navigatePopup(data.finalUrl);
+        triggerBrowserDownload(data.finalUrl, file.filename);
         toast.update(toastId, {
           render: data.cached
-            ? `🎬 Opening "${file.filename}" (cached resolution)`
-            : `🎬 Opening "${file.filename}"`,
+            ? `⬇️ Downloading "${file.filename}" (cached resolution)`
+            : `⬇️ Downloading "${file.filename}"`,
           type: 'success',
           isLoading: false,
           autoClose: 3000,
@@ -291,7 +304,7 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         ...s,
         [intermediate]: { status: 'failed', error: reason },
       }));
-      navigatePopup(intermediate);
+      openAdPage(intermediate);
       toast.update(toastId, {
         render: `⚠️ Could not auto-resolve (${reason}); opening ad page.`,
         type: 'warning',
@@ -309,15 +322,12 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
           error: upstream?.error || err.message,
         },
       }));
-      // Close the pre-opened about:blank rather than navigating it to
-      // the ad page — for 4xx errors the ad page won't help the user
-      // anyway, and for 5xx errors we want them to retry not abandon.
-      // Exception: 4xx host_not_allowed is the only case where falling
-      // back to the ad page is genuinely useful as a manual escape hatch.
+      // Don't open the ad page for most errors — for 4xx it won't help the
+      // user anyway, and for 5xx we want them to retry not abandon. The one
+      // exception is 4xx host_not_allowed, where the ad page is a genuine
+      // manual escape hatch.
       if (status === 400 && upstream?.error === 'host_not_allowed') {
-        navigatePopup(intermediate);
-      } else {
-        closePopup();
+        openAdPage(intermediate);
       }
       const detail = upstream?.detail || upstream?.error || err.message;
       const msg = status === 503
@@ -454,8 +464,8 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
     
     try {
       if (href && href !== '#') {
-        window.open(href, '_blank');
-        toast.success(`🎬 Opening download for "${filename}"`);
+        triggerBrowserDownload(href, filename);
+        toast.success(`⬇️ Downloading "${filename}"`);
       }
       
       if (onDownload) {
