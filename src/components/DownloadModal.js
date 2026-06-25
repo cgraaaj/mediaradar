@@ -205,10 +205,16 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       return;
     }
 
-    // Optimistic: if a previous click already resolved this row, just
-    // re-trigger the download from the cached final URL.
+    // Optimistic re-click: reuse a final URL we resolved in THIS session, but
+    // only if it's very recent. The resolved URLs are short-lived signed URLs,
+    // so reusing one that's minutes-to-hours old hands the user an HTTP 400.
+    // Past the window we fall through and re-resolve a fresh one below.
+    const FRESH_REUSE_MS = 90 * 1000;
     const prior = resolveState[intermediate];
-    if (prior && prior.status === 'resolved' && prior.finalUrl) {
+    if (
+      prior && prior.status === 'resolved' && prior.finalUrl &&
+      prior.resolvedAtMs && (Date.now() - prior.resolvedAtMs) < FRESH_REUSE_MS
+    ) {
       triggerBrowserDownload(prior.finalUrl, file.filename);
       toast.success(`⬇️ Downloading "${file.filename}"`);
       return;
@@ -235,7 +241,14 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
       const apiBaseUrl = process.env.REACT_APP_API_BASE_URL || '/api';
       const { data } = await axios.post(
         `${apiBaseUrl}/links/resolve`,
-        { intermediateUrl: intermediate },
+        // forceFresh: the final hubcloud→google / workers.dev URLs are
+        // short-lived SIGNED URLs. A cold-radar PG-cached resolution from
+        // hours ago is very likely already expired and returns HTTP 400
+        // ("resolves 200 but the download 400s / nothing happens"). On an
+        // explicit user download click we always re-walk the chain to hand
+        // back a guaranteed-live URL. Repeat clicks within a short window are
+        // served from the in-session cache below (see FRESH_REUSE_MS).
+        { intermediateUrl: intermediate, forceFresh: true },
         { timeout: 20000 }
       );
 
@@ -284,6 +297,7 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
             finalUrlHost: data.finalUrlHost || null,
             cached: !!data.cached,
             source: data.source || null,
+            resolvedAtMs: Date.now(),
           },
         }));
         triggerBrowserDownload(data.finalUrl, file.filename);
@@ -979,20 +993,20 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
                                             toast.info('🚫 File no longer available upstream. Try a different quality or use Request Movie.');
                                             return;
                                           }
-                                          // 1) Already resolved this session? Reuse the in-memory result.
-                                          if (isResolvedNow) {
-                                            return handleDownloadClick(e, rowResolve.finalUrl, file.filename);
-                                          }
-                                          // 2) Have a stable intermediate? JIT-resolve through the
-                                          //    backend so the user always gets a fresh signed URL.
-                                          //    Required even for status='resolved' rows because the
-                                          //    cached final_url in PG can be hours old and the
-                                          //    upstream CDN tokens (hubcloud / fsl-buckets / etc.)
-                                          //    expire well within that window. The backend +
-                                          //    cold-radar share an LRU + PG cache so repeat clicks
-                                          //    hit warm paths in <100 ms.
+                                          // 1) Resolvable row? ALWAYS go through the resolver. It
+                                          //    re-uses a just-resolved URL for an instant re-click
+                                          //    (short freshness window) but otherwise re-walks the
+                                          //    chain to mint a FRESH signed URL. We must not blindly
+                                          //    reuse the in-memory finalUrl: the upstream google /
+                                          //    CDN tokens expire fast, so a stale one returns HTTP
+                                          //    400 (the "resolves 200 but download 400s" bug).
                                           if (intermediateUrlForFile) {
                                             return handleResolveAndOpen(e, file);
+                                          }
+                                          // 2) Already resolved + no re-walkable intermediate: best-
+                                          //    effort open of the in-memory URL.
+                                          if (isResolvedNow) {
+                                            return handleDownloadClick(e, rowResolve.finalUrl, file.filename);
                                           }
                                           // 3) Legacy / non-resolvable rows: fall back to whatever
                                           //    final URL we have. Best-effort; may 404 if stale.
