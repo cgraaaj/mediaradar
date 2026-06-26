@@ -315,17 +315,35 @@ const DownloadModal = ({ movie, isOpen, onClose, onDownload }) => {
         return;
       }
 
+      // Gated (cpm_gated / ad_gated): we couldn't mint a direct file URL — the
+      // only live mirror is typically behind a Cloudflare Turnstile our server
+      // IP can't pass. But cold-radar hands back `gatedUrl`: the LIVE page/
+      // mirror it reached (e.g. the real hubcloud drive link, or a failover-
+      // TLD hub page). Opening THAT works in the user's own browser (their
+      // residential IP passes Turnstile) — whereas opening the captured
+      // `intermediate` would land them on the now-dead domain (the
+      // "still shows hblinks.dad" symptom). Prefer gatedUrl; fall back to the
+      // intermediate only when we have no live target.
       const reason = data?.error || data?.status || 'unknown';
+      const walkUrl = data?.gatedUrl || intermediate;
+      const haveLiveTarget = !!data?.gatedUrl;
       setResolveState((s) => ({
         ...s,
-        [intermediate]: { status: 'failed', error: reason },
+        [intermediate]: {
+          status: 'gated',
+          error: reason,
+          gatedUrl: data?.gatedUrl || null,
+          gatedUrlHost: data?.gatedUrlHost || null,
+        },
       }));
-      openAdPage(intermediate);
+      openAdPage(walkUrl);
       toast.update(toastId, {
-        render: `⚠️ Could not auto-resolve (${reason}); opening ad page.`,
-        type: 'warning',
+        render: haveLiveTarget
+          ? `🔗 Opening download page on ${data.gatedUrlHost || 'the host'} — complete the on-page step to grab the file.`
+          : `⚠️ Could not auto-resolve (${reason}); opening the source link.`,
+        type: haveLiveTarget ? 'info' : 'warning',
         isLoading: false,
-        autoClose: 4500,
+        autoClose: 5000,
       });
     } catch (err) {
       const status = err.response?.status;
