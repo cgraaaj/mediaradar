@@ -95,13 +95,12 @@ ingressRoute:
       # Authentik forward-auth via the embedded-outpost Middleware CRD.
       # Domain-level provider (cookie_domain=cgraaaj.in) gives SSO across
       # all *.cgraaaj.in apps once logged in at auth.dev.cgraaaj.in.
-      # TEMPORARILY DISABLED (2026-06-25) to test resolver changes end-to-end
-      # without the SSO gate. RE-ENABLE before leaving this public: the app's
-      # /api/links/resolve walks redirector chains and could be abused as an
-      # open resolver if left unauthenticated on a public host.
-      # middlewares:
-      #   - name: ak-outpost-authentik-embedded-outpost
-      #     namespace: authentik
+      # RE-ENABLED 2026-06-28 after resolver testing (was temporarily disabled
+      # 2026-06-25). Gates the app so /api/links/resolve can't be abused as an
+      # open resolver. The temporary ipAllowList stand-in below is now disabled.
+      middlewares:
+        - name: ak-outpost-authentik-embedded-outpost
+          namespace: authentik
       services:
         - name: 
           port: 80
@@ -116,8 +115,9 @@ ingressRoute:
 # Defaults to RFC1918 private ranges because mediaradar.cgraaaj.in resolves to
 # a LAN IP (10.19.94.72) — tighten to a single /32 if you want stricter access.
 # To restore SSO: set enabled=false here AND uncomment the authentik middleware.
+# Restored to SSO 2026-06-28: authentik re-enabled above, this stand-in OFF.
 ipAllowList:
-  enabled: true
+  enabled: false
   sourceRange:
     - 10.0.0.0/8
     - 172.16.0.0/12
